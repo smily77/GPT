@@ -1,0 +1,22 @@
+# Arduino / PlatformIO / VSCode
+.pio
+.build
+build/
+CMakeFiles/
+CMakeCache.txt
+cmake-build*/
+*.log
+.vscode/
+.DS_Store
+*.bak
+*.tmp
+*.swp
+*.swo
+*.code-workspace
+*.elf
+*.bin
+*.hex
+*.map
+*.ini
+*.pyc
+__pycache__/
