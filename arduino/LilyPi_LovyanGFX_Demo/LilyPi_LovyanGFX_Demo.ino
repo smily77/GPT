@@ -19,13 +19,13 @@ public:
       cfg.spi_mode   = 0;
       cfg.freq_write = 40000000;  // ggf. reduzieren, falls Bildfehler auftreten
       cfg.freq_read  = 16000000;
-      cfg.spi_3wire  = true;      // ILI9481 nutzt nur MOSI, kein MISO
+      //cfg.spi_3wire  = true;      // ILI9481 nutzt nur MOSI, kein MISO
       cfg.use_lock   = true;
       cfg.dma_channel = 1;
 
       cfg.pin_sclk = 18;
       cfg.pin_mosi = 19;
-      cfg.pin_miso = -1;
+      cfg.pin_miso = 23;
       cfg.pin_dc   = 27;
 
       _bus_instance.config(cfg);
@@ -35,7 +35,7 @@ public:
     { // Panel-spezifische Pins/Funktionen einstellen
       auto cfg = _panel_instance.config();
       cfg.pin_cs   = 5;
-      cfg.pin_rst  = 33;
+      cfg.pin_rst  = -1;
       cfg.pin_busy = -1;
 
       cfg.memory_width  = 320;
@@ -53,11 +53,10 @@ public:
 
     { // PWM-Backlight
       auto cfg = _light_instance.config();
-      cfg.pin_bl = 32;
+      cfg.pin_bl = 12;
       cfg.freq = 44100;
       cfg.pwm_channel = 7;
       cfg.invert = false;
-      cfg.brightness = 255;
 
       _light_instance.config(cfg);
       _panel_instance.setLight(&_light_instance);
@@ -72,7 +71,7 @@ public:
       cfg.bus_shared = true;
       cfg.offset_rotation = 1; // passend zur Displayausrichtung
 
-      cfg.i2c_port = I2C_NUM_0;
+      cfg.i2c_port = 0; // I2C_NUM_0 (0) wird von der Arduino-Variante genutzt
       cfg.pin_sda  = 21;
       cfg.pin_scl  = 22;
       cfg.freq = 400000;
