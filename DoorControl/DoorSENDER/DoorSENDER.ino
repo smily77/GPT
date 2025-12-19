@@ -52,6 +52,7 @@ struct __attribute__((packed)) Message {
 
 Adafruit_SSD1306 display(128, 32, &Wire, -1);
 
+uint8_t selfMac[6];
 uint32_t currentSessionId = 0;
 uint8_t receiverNonce[16];
 uint32_t sessionStartMs = 0;
@@ -72,6 +73,16 @@ void logDebug(const char *fmt, ...) {
   va_start(args, fmt);
   vsnprintf(buf, sizeof(buf), fmt, args);
   va_end(args);
+  Serial.println(buf);
+#endif
+}
+
+void logPeer(const char *label, const uint8_t mac[6]) {
+#if DEBUG
+  char buf[32];
+  snprintf(buf, sizeof(buf), "%02X:%02X:%02X:%02X:%02X:%02X",
+           mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
+  Serial.print(label);
   Serial.println(buf);
 #endif
 }
@@ -157,6 +168,14 @@ void computeDenyTag(uint8_t out[16], uint32_t session_id, uint8_t reason_code) {
 }
 
 void sendHello() {
+  if (!esp_now_is_peer_exist(RECEIVER_MAC)) {
+    esp_now_peer_info_t peer = {};
+    memcpy(peer.peer_addr, RECEIVER_MAC, 6);
+    peer.channel = WIFI_CHANNEL;
+    peer.encrypt = false;
+    esp_err_t addRes = esp_now_add_peer(&peer);
+    logDebug("Re-add peer (HELLO) res=%d", addRes);
+  }
   Message msg = {};
   msg.version = PROTOCOL_VERSION;
   msg.type = MSG_HELLO;
@@ -166,6 +185,14 @@ void sendHello() {
 
 void sendOpen() {
   if (!sessionValid) return;
+  if (!esp_now_is_peer_exist(RECEIVER_MAC)) {
+    esp_now_peer_info_t peer = {};
+    memcpy(peer.peer_addr, RECEIVER_MAC, 6);
+    peer.channel = WIFI_CHANNEL;
+    peer.encrypt = false;
+    esp_err_t addRes = esp_now_add_peer(&peer);
+    logDebug("Re-add peer (OPEN) res=%d", addRes);
+  }
   Message msg = {};
   msg.version = PROTOCOL_VERSION;
   msg.type = MSG_OPEN;
@@ -239,6 +266,10 @@ void onDataRecv(const esp_now_recv_info *info, const uint8_t *incomingData, int 
 
 void onDataSent(const uint8_t *, esp_now_send_status_t status) {
   logDebug("Send status=%d", status);
+  if (status != ESP_NOW_SEND_SUCCESS) {
+    logDebug("Send failed, check MAC/channel. Receiver MAC expected:");
+    logPeer("RX MAC ", RECEIVER_MAC);
+  }
 }
 
 void setup() {
@@ -255,6 +286,9 @@ void setup() {
 
   WiFi.mode(WIFI_STA);
   esp_wifi_set_channel(WIFI_CHANNEL, WIFI_SECOND_CHAN_NONE);
+  esp_wifi_get_mac(WIFI_IF_STA, selfMac);
+  logPeer("Sender MAC ", selfMac);
+  logPeer("Receiver MAC ", RECEIVER_MAC);
   if (esp_now_init() != ESP_OK) {
     logDebug("ESP-NOW init failed");
     while (true) delay(1000);

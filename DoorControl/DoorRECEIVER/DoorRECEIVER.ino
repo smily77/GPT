@@ -87,6 +87,16 @@ bool constantTimeEqual(const uint8_t *a, const uint8_t *b, size_t len) {
   return diff == 0;
 }
 
+void logPeer(const char *label, const uint8_t mac[6]) {
+#if DEBUG
+  char buf[32];
+  snprintf(buf, sizeof(buf), "%02X:%02X:%02X:%02X:%02X:%02X",
+           mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
+  Serial.print(label);
+  Serial.println(buf);
+#endif
+}
+
 void logDebug(const char *fmt, ...) {
 #if DEBUG
   char buf[128];
@@ -251,12 +261,14 @@ void ensurePeer(const uint8_t *mac) {
   memcpy(peer.peer_addr, mac, 6);
   peer.channel = WIFI_CHANNEL;
   peer.encrypt = false;
-  esp_now_add_peer(&peer);
+  esp_err_t res = esp_now_add_peer(&peer);
+  logDebug("Add peer res=%d", res);
 }
 
 void onDataRecv(const esp_now_recv_info *info, const uint8_t *incomingData, int len) {
   if (!info) return;
   const uint8_t *mac = info->src_addr;
+  logPeer("RX from ", mac);
   if (len != (int)sizeof(Message)) return;
   Message msg;
   memcpy(&msg, incomingData, sizeof(Message));
@@ -296,6 +308,7 @@ void setup() {
   WiFi.mode(WIFI_STA);
   esp_wifi_set_channel(WIFI_CHANNEL, WIFI_SECOND_CHAN_NONE);
   esp_wifi_get_mac(WIFI_IF_STA, selfMac);
+  logPeer("Receiver MAC ", selfMac);
 
   if (esp_now_init() != ESP_OK) {
     logDebug("ESP-NOW init failed");
