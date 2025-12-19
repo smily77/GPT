@@ -13,7 +13,8 @@
 // === CONFIGURABLE PARAMETERS ===
 #define WIFI_CHANNEL 6
 #define SENDER_ID 1
-static const uint8_t RECEIVER_MAC[6] = {0x24, 0x6F, 0x28, 0xAA, 0xBB, 0xCC};
+static const uint8_t RECEIVER_MAC[6] = {0x50, 0x78, 0x7D, 0x52, 0xD8, 0xA8};
+static const uint8_t SENDER_STA_MAC[6] = {0x24, 0x6F, 0x28, 0x11, 0x22, 0x33};
 static const uint8_t K_SENDER[32] = {
   0x01,0x02,0x03,0x04,0x05,0x06,0x07,0x08,
   0x09,0x0A,0x0B,0x0C,0x0D,0x0E,0x0F,0x10,
@@ -285,6 +286,7 @@ void setup() {
   drawCentered("Wait");
 
   WiFi.mode(WIFI_STA);
+  esp_wifi_set_mac(WIFI_IF_STA, SENDER_STA_MAC);
   esp_wifi_set_channel(WIFI_CHANNEL, WIFI_SECOND_CHAN_NONE);
   esp_wifi_get_mac(WIFI_IF_STA, selfMac);
   logPeer("Sender MAC ", selfMac);
