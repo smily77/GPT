@@ -26,7 +26,7 @@ static const uint8_t K_SENDER[32] = {
 #define SCL_PIN 9
 #define I2C_FREQ 400000
 #define AUX_LED_PIN 6  // Reserved for potential future use
-#define IN_RANGE_TIMEOUT_MS 3000
+#define IN_RANGE_TIMEOUT_MS 5000
 #define SESSION_TTL_MS 10000
 #define DENY_DISPLAY_MS 3000
 #define OPEN_TIMEOUT_MS 1000
@@ -308,7 +308,7 @@ void setup() {
 void loop() {
   static uint32_t lastHello = 0;
   uint32_t now = millis();
-  if (now - lastHello > 500) {
+  if (now - lastHello > 300) {
     sendHello();
     lastHello = now;
   }

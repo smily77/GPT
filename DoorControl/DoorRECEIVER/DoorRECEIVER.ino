@@ -62,6 +62,7 @@ uint8_t selfMac[6];
 Adafruit_NeoPixel statusPixel(1, STATUS_PIXEL_PIN, NEO_GRB + NEO_KHZ800);
 bool relayPulse = false;
 uint32_t relayUntil = 0;
+uint32_t lastContactMs[8] = {0};
 
 void setStatusColor(uint32_t color) {
   statusPixel.setPixelColor(0, color);
@@ -74,7 +75,7 @@ uint32_t colorBlue() { return statusPixel.Color(0, 0, 255); }
 
 bool hasActiveSession(uint32_t now) {
   for (size_t i = 0; i < 8; i++) {
-    if (sessions[i].session_id != 0 && !sessions[i].used && now <= sessions[i].expires_at) {
+    if (lastContactMs[i] != 0 && (now - lastContactMs[i]) <= IN_RANGE_TIMEOUT_MS) {
       return true;
     }
   }
@@ -196,6 +197,7 @@ void sendChallenge(const SenderConfig &sc, const uint8_t *mac) {
   fillRandom(ss.nonce, 16);
   ss.expires_at = millis() + SESSION_TTL_MS;
   ss.used = false;
+  lastContactMs[sc.sender_id % 8] = millis();
 
   Message msg = {};
   msg.version = PROTOCOL_VERSION;
@@ -232,10 +234,12 @@ void sendDeny(const SenderConfig &sc, uint32_t session_id, const uint8_t *mac, u
 }
 
 void handleHello(const SenderConfig &sc, const uint8_t *mac) {
+  lastContactMs[sc.sender_id % 8] = millis();
   sendChallenge(sc, mac);
 }
 
 void handleOpen(const SenderConfig &sc, const uint8_t *mac, const Message &msg) {
+  lastContactMs[sc.sender_id % 8] = millis();
   SessionState &ss = sessions[sc.sender_id % 8];
   if (msg.session_id != ss.session_id || ss.used || millis() > ss.expires_at) {
     sendDeny(sc, msg.session_id, mac, 1);
@@ -339,6 +343,7 @@ void loop() {
     if (sessions[i].session_id != 0 && now > sessions[i].expires_at) {
       sessions[i].session_id = 0;
       sessions[i].used = false;
+      lastContactMs[i] = 0;
     }
   }
 
