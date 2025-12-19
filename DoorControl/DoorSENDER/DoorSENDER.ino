@@ -1,4 +1,15 @@
 // DoorSENDER.ino - ESP32-C3 sender with OLED + button
+
+#include <Arduino.h>
+#include <WiFi.h>
+#include <esp_wifi.h>
+#include <esp_now.h>
+#include <mbedtls/md.h>
+#include <Wire.h>
+#include <Adafruit_GFX.h>
+#include <Adafruit_SSD1306.h>
+#include <Fonts/FreeSansBold12pt7b.h>
+
 // === CONFIGURABLE PARAMETERS ===
 #define WIFI_CHANNEL 6
 #define SENDER_ID 1
@@ -20,16 +31,6 @@ static const uint8_t K_SENDER[32] = {
 #define DEBOUNCE_MS 60
 #define DEBUG 1
 // ================================
-
-#include <Arduino.h>
-#include <WiFi.h>
-#include <esp_wifi.h>
-#include <esp_now.h>
-#include <mbedtls/md.h>
-#include <Wire.h>
-#include <Adafruit_GFX.h>
-#include <Adafruit_SSD1306.h>
-#include <Fonts/FreeSansBold12pt7b.h>
 
 #define PROTOCOL_VERSION 1
 #define MSG_HELLO 1
@@ -215,8 +216,9 @@ void handleDeny(const Message &msg) {
   drawCentered("Denay");
 }
 
-void onDataRecv(const uint8_t *mac, const uint8_t *incomingData, int len) {
-  if (len != sizeof(Message)) return;
+void onDataRecv(const esp_now_recv_info *info, const uint8_t *incomingData, int len) {
+  (void)info;
+  if (len != (int)sizeof(Message)) return;
   Message msg;
   memcpy(&msg, incomingData, sizeof(Message));
   switch (msg.type) {

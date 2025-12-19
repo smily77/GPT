@@ -1,4 +1,11 @@
 // DoorRECEIVER.ino - ESP32-C3 garage door receiver with relay
+
+#include <Arduino.h>
+#include <WiFi.h>
+#include <esp_wifi.h>
+#include <esp_now.h>
+#include <mbedtls/md.h>
+
 // === CONFIGURABLE PARAMETERS ===
 #define WIFI_CHANNEL 6
 #define RELAY_PIN 2
@@ -23,12 +30,6 @@ static SenderConfig senders[] = {
 };
 const size_t NUM_SENDERS = sizeof(senders) / sizeof(senders[0]);
 // ================================
-
-#include <Arduino.h>
-#include <WiFi.h>
-#include <esp_wifi.h>
-#include <esp_now.h>
-#include <mbedtls/md.h>
 
 #define PROTOCOL_VERSION 1
 #define MSG_HELLO 1
@@ -231,8 +232,10 @@ void ensurePeer(const uint8_t *mac) {
   esp_now_add_peer(&peer);
 }
 
-void onDataRecv(const uint8_t *mac, const uint8_t *incomingData, int len) {
-  if (len != sizeof(Message)) return;
+void onDataRecv(const esp_now_recv_info *info, const uint8_t *incomingData, int len) {
+  if (!info) return;
+  const uint8_t *mac = info->src_addr;
+  if (len != (int)sizeof(Message)) return;
   Message msg;
   memcpy(&msg, incomingData, sizeof(Message));
   const SenderConfig *sc = findSender(msg.sender_id, mac);
