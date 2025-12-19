@@ -5,10 +5,12 @@
 #include <esp_wifi.h>
 #include <esp_now.h>
 #include <mbedtls/md.h>
+#include <Adafruit_NeoPixel.h>
 
 // === CONFIGURABLE PARAMETERS ===
 #define WIFI_CHANNEL 6
 #define RELAY_PIN 2
+#define STATUS_PIXEL_PIN 8
 #define SESSION_TTL_MS 10000
 #define IN_RANGE_TIMEOUT_MS 3000
 #define RELAY_PULSE_MS 350
@@ -57,6 +59,27 @@ struct SessionState {
 
 SessionState sessions[8];
 uint8_t selfMac[6];
+Adafruit_NeoPixel statusPixel(1, STATUS_PIXEL_PIN, NEO_GRB + NEO_KHZ800);
+bool relayPulse = false;
+uint32_t relayUntil = 0;
+
+void setStatusColor(uint32_t color) {
+  statusPixel.setPixelColor(0, color);
+  statusPixel.show();
+}
+
+uint32_t colorOff() { return statusPixel.Color(0, 0, 0); }
+uint32_t colorGreen() { return statusPixel.Color(0, 255, 0); }
+uint32_t colorBlue() { return statusPixel.Color(0, 0, 255); }
+
+bool hasActiveSession(uint32_t now) {
+  for (size_t i = 0; i < 8; i++) {
+    if (sessions[i].session_id != 0 && !sessions[i].used && now <= sessions[i].expires_at) {
+      return true;
+    }
+  }
+  return false;
+}
 
 bool constantTimeEqual(const uint8_t *a, const uint8_t *b, size_t len) {
   uint8_t diff = 0;
@@ -173,6 +196,7 @@ void sendChallenge(const SenderConfig &sc, const uint8_t *mac) {
   computeChallengeTag(msg.tag, sc, ss.session_id, ss.nonce);
   sendMessage(mac, msg);
   logDebug("Challenge to sender %d", sc.sender_id);
+  setStatusColor(colorGreen());
 }
 
 void sendAck(const SenderConfig &sc, uint32_t session_id, const uint8_t *mac, uint8_t code) {
@@ -197,9 +221,6 @@ void sendDeny(const SenderConfig &sc, uint32_t session_id, const uint8_t *mac, u
   sendMessage(mac, msg);
 }
 
-bool relayPulse = false;
-uint32_t relayUntil = 0;
-
 void handleHello(const SenderConfig &sc, const uint8_t *mac) {
   sendChallenge(sc, mac);
 }
@@ -219,6 +240,7 @@ void handleOpen(const SenderConfig &sc, const uint8_t *mac, const Message &msg) 
   ss.used = true;
   relayPulse = true;
   relayUntil = millis() + RELAY_PULSE_MS;
+  setStatusColor(colorBlue());
   sendAck(sc, msg.session_id, mac, 0);
   logDebug("Open accepted sender=%d", sc.sender_id);
 }
@@ -267,6 +289,9 @@ void setup() {
 #endif
   pinMode(RELAY_PIN, OUTPUT);
   digitalWrite(RELAY_PIN, LOW);
+  statusPixel.begin();
+  statusPixel.clear();
+  statusPixel.show();
 
   WiFi.mode(WIFI_STA);
   esp_wifi_set_channel(WIFI_CHANNEL, WIFI_SECOND_CHAN_NONE);
@@ -292,6 +317,9 @@ void loop() {
   }
   if (relayPulse) {
     digitalWrite(RELAY_PIN, HIGH);
+    setStatusColor(colorBlue());
+  } else {
+    digitalWrite(RELAY_PIN, LOW);
   }
 
   for (size_t i = 0; i < 8; i++) {
@@ -299,5 +327,9 @@ void loop() {
       sessions[i].session_id = 0;
       sessions[i].used = false;
     }
+  }
+
+  if (!relayPulse) {
+    setStatusColor(hasActiveSession(now) ? colorGreen() : colorOff());
   }
 }

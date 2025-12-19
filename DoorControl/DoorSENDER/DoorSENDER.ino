@@ -20,10 +20,11 @@ static const uint8_t K_SENDER[32] = {
   0x11,0x12,0x13,0x14,0x15,0x16,0x17,0x18,
   0x19,0x1A,0x1B,0x1C,0x1D,0x1E,0x1F,0x20
 };
-#define BUTTON_PIN 0
+#define BUTTON_PIN 7  // GPIO7, active low, INPUT_PULLUP
 #define SDA_PIN 8
-#define SCL_PIN 10
+#define SCL_PIN 9
 #define I2C_FREQ 400000
+#define AUX_LED_PIN 6  // Reserved for potential future use
 #define IN_RANGE_TIMEOUT_MS 3000
 #define SESSION_TTL_MS 10000
 #define DENY_DISPLAY_MS 3000
