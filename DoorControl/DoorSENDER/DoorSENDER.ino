@@ -9,18 +9,10 @@
 #include <Adafruit_GFX.h>
 #include <Adafruit_SSD1306.h>
 #include <Fonts/FreeSansBold12pt7b.h>
+#include <doorLockData.h>
 
 // === CONFIGURABLE PARAMETERS ===
-#define WIFI_CHANNEL 6
 #define SENDER_ID 1
-static const uint8_t RECEIVER_MAC[6] = {0x50, 0x78, 0x7D, 0x52, 0xD8, 0xA8};
-static const uint8_t SENDER_STA_MAC[6] = {0x24, 0x6F, 0x28, 0x11, 0x22, 0x33};
-static const uint8_t K_SENDER[32] = {
-  0x01,0x02,0x03,0x04,0x05,0x06,0x07,0x08,
-  0x09,0x0A,0x0B,0x0C,0x0D,0x0E,0x0F,0x10,
-  0x11,0x12,0x13,0x14,0x15,0x16,0x17,0x18,
-  0x19,0x1A,0x1B,0x1C,0x1D,0x1E,0x1F,0x20
-};
 #define BUTTON_PIN 7  // GPIO7, active low, INPUT_PULLUP
 #define SDA_PIN 8
 #define SCL_PIN 9
@@ -54,6 +46,7 @@ struct __attribute__((packed)) Message {
 Adafruit_SSD1306 display(128, 32, &Wire, -1);
 
 uint8_t selfMac[6];
+const SenderSecret *selfSecret = nullptr;
 uint32_t currentSessionId = 0;
 uint8_t receiverNonce[16];
 uint32_t sessionStartMs = 0;
@@ -103,6 +96,15 @@ void drawCentered(const String &text) {
   display.display();
 }
 
+const SenderSecret *findSelfSecret(uint8_t senderId) {
+  for (size_t i = 0; i < SENDER_SECRETS_COUNT; i++) {
+    if (SENDER_SECRETS[i].sender_id == senderId) {
+      return &SENDER_SECRETS[i];
+    }
+  }
+  return nullptr;
+}
+
 bool constantTimeEqual(const uint8_t *a, const uint8_t *b, size_t len) {
   uint8_t diff = 0;
   for (size_t i = 0; i < len; i++) diff |= a[i] ^ b[i];
@@ -131,7 +133,7 @@ void computeChallengeTag(uint8_t out[16], uint32_t session_id, const uint8_t non
   memcpy(buf + idx, &session_id, sizeof(session_id)); idx += sizeof(session_id);
   memcpy(buf + idx, nonce, 16); idx += 16;
   memcpy(buf + idx, RECEIVER_MAC, 6); idx += 6;
-  hmacTrunc16(K_SENDER, sizeof(K_SENDER), buf, idx, out);
+  hmacTrunc16(selfSecret->key, sizeof(selfSecret->key), buf, idx, out);
 }
 
 void computeOpenTag(uint8_t out[16], uint32_t session_id, const uint8_t nonce[16]) {
@@ -143,7 +145,7 @@ void computeOpenTag(uint8_t out[16], uint32_t session_id, const uint8_t nonce[16
   memcpy(buf + idx, &session_id, sizeof(session_id)); idx += sizeof(session_id);
   memcpy(buf + idx, nonce, 16); idx += 16;
   memcpy(buf + idx, RECEIVER_MAC, 6); idx += 6;
-  hmacTrunc16(K_SENDER, sizeof(K_SENDER), buf, idx, out);
+  hmacTrunc16(selfSecret->key, sizeof(selfSecret->key), buf, idx, out);
 }
 
 void computeAckTag(uint8_t out[16], uint32_t session_id, uint8_t result_code) {
@@ -154,7 +156,7 @@ void computeAckTag(uint8_t out[16], uint32_t session_id, uint8_t result_code) {
   buf[idx++] = SENDER_ID;
   memcpy(buf + idx, &session_id, sizeof(session_id)); idx += sizeof(session_id);
   buf[idx++] = result_code;
-  hmacTrunc16(K_SENDER, sizeof(K_SENDER), buf, idx, out);
+  hmacTrunc16(selfSecret->key, sizeof(selfSecret->key), buf, idx, out);
 }
 
 void computeDenyTag(uint8_t out[16], uint32_t session_id, uint8_t reason_code) {
@@ -165,7 +167,7 @@ void computeDenyTag(uint8_t out[16], uint32_t session_id, uint8_t reason_code) {
   buf[idx++] = SENDER_ID;
   memcpy(buf + idx, &session_id, sizeof(session_id)); idx += sizeof(session_id);
   buf[idx++] = reason_code;
-  hmacTrunc16(K_SENDER, sizeof(K_SENDER), buf, idx, out);
+  hmacTrunc16(selfSecret->key, sizeof(selfSecret->key), buf, idx, out);
 }
 
 void sendHello() {
@@ -283,10 +285,19 @@ void setup() {
   display.clearDisplay();
   display.setTextColor(SSD1306_WHITE);
   display.setFont(&FreeSansBold12pt7b);
-  drawCentered("Wait");
+  drawCentered("-");
+
+  selfSecret = findSelfSecret(SENDER_ID);
+  if (!selfSecret) {
+    logDebug("Sender secrets not found for ID %d", SENDER_ID);
+    while (true) delay(1000);
+  }
+
+  pinMode(AUX_LED_PIN, OUTPUT);
+  digitalWrite(AUX_LED_PIN, LOW);
 
   WiFi.mode(WIFI_STA);
-  esp_wifi_set_mac(WIFI_IF_STA, SENDER_STA_MAC);
+  esp_wifi_set_mac(WIFI_IF_STA, selfSecret->sender_mac);
   esp_wifi_set_channel(WIFI_CHANNEL, WIFI_SECOND_CHAN_NONE);
   esp_wifi_get_mac(WIFI_IF_STA, selfMac);
   logPeer("Sender MAC ", selfMac);
@@ -340,7 +351,7 @@ void loop() {
     if (link && !denyUntil) {
       sendOpen();
     } else {
-      drawCentered("Wait");
+      drawCentered("-");
       openPending = false;
     }
     while (digitalRead(BUTTON_PIN) == LOW) {
@@ -353,6 +364,6 @@ void loop() {
   } else if (link) {
     drawCentered("Link");
   } else {
-    drawCentered("Wait");
+    drawCentered("-");
   }
 }

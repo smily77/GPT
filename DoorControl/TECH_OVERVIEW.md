@@ -3,8 +3,8 @@
 Dieses Dokument beschreibt die Funktionsweise der DoorSENDER- und DoorRECEIVER-Sketches, das Nachrichtenformat und die Sicherheitslogik, um eine spätere Weiterentwicklung zu erleichtern.
 
 ## Architektur
-- **Transport**: ESP-NOW im STA-Modus auf festem `WIFI_CHANNEL` (beide Seiten identisch). Peers werden mit vordefinierten MACs hinzugefügt; keine ESP-NOW-Verschlüsselung, stattdessen anwendungsspezifisches HMAC.
-- **Rolle Sender**: OLED-UI (nur „Wait“/„Link“/„Denay“), Taster (aktiv low, Pull-up). Sendet zyklisch HELLO und bei Bedarf OPEN. Hält aktuelle Session (session_id + receiver_nonce) im RAM.
+- **Transport**: ESP-NOW im STA-Modus auf festem `WIFI_CHANNEL` aus `doorLockData.h` (beide Seiten identisch). Peers werden mit vordefinierten MACs hinzugefügt; keine ESP-NOW-Verschlüsselung, stattdessen anwendungsspezifisches HMAC.
+- **Rolle Sender**: OLED-UI (nur „-“/„Link“/„Denay“), Taster (aktiv low, Pull-up). Sendet zyklisch HELLO und bei Bedarf OPEN. Hält aktuelle Session (session_id + receiver_nonce) im RAM.
 - **Rolle Receiver**: Verwaltet pro Sender-ID eine RAM-Session (session_id, receiver_nonce, Ablaufzeit, used-Flag). Steuert Relais (350 ms Puls) und WS2812-Statuspixel (aus/grün/blau).
 
 ## Nachrichtenformat
@@ -37,7 +37,7 @@ Dieses Dokument beschreibt die Funktionsweise der DoorSENDER- und DoorRECEIVER-S
 ## Statuslogik
 ### Sender
 - Zustand „Link“, wenn eine gültige, nicht abgelaufene Session vorliegt (`SESSION_TTL_MS`, `IN_RANGE_TIMEOUT_MS`).
-- Button: bei „Link“ → OPEN senden; sonst UI auf „Wait“ setzen.
+- Button: bei „Link“ → OPEN senden; sonst UI auf „-“ setzen.
 - OPEN-Timeout setzt Anzeige auf „Denay“ für `DENY_DISPLAY_MS`.
 - HELLO-Intervall verkürzt, um Link-Stabilität zu verbessern.
 
@@ -47,7 +47,7 @@ Dieses Dokument beschreibt die Funktionsweise der DoorSENDER- und DoorRECEIVER-S
 - Relais: 350 ms HIGH-Puls auf `RELAY_PIN` bei gültigem OPEN.
 
 ## Erweiterungspunkte
-- **Weitere Sender**: `senders[]` erweitern (MAC, sender_id, key); Sender erhält passenden Key/MAC.
+- **Weitere Sender**: `SENDER_SECRETS[]` in `doorLockData.h` erweitern (MAC, sender_id, key); Sender erhält passenden Key/MAC und setzt `SENDER_ID` entsprechend.
 - **Mehr Fehlergründe**: `reserved`-Byte in DENY/ACK kann differenzierte Codes tragen.
 - **Multi-Pixel-Status**: WS2812 kann auf mehrere Pixel erweitert werden; aktuell nur Index 0 genutzt.
 - **Logging/Telemetry**: Serielle Logs enthalten MACs und Sendestatus; kann auf Remote-Logging erweitert werden.

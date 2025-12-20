@@ -6,31 +6,15 @@
 #include <esp_now.h>
 #include <mbedtls/md.h>
 #include <Adafruit_NeoPixel.h>
+#include <doorLockData.h>
 
 // === CONFIGURABLE PARAMETERS ===
-#define WIFI_CHANNEL 6
 #define RELAY_PIN 2
 #define STATUS_PIXEL_PIN 8
 #define SESSION_TTL_MS 10000
 #define IN_RANGE_TIMEOUT_MS 3000
 #define RELAY_PULSE_MS 350
 #define DEBUG 1
-
-// Allowlisted senders (update MACs/keys)
-struct SenderConfig {
-  uint8_t sender_id;
-  uint8_t mac[6];
-  uint8_t key[32];
-};
-
-static SenderConfig senders[] = {
-  {1, {0x24, 0x6F, 0x28, 0x11, 0x22, 0x33}, {
-    0x01,0x02,0x03,0x04,0x05,0x06,0x07,0x08,
-    0x09,0x0A,0x0B,0x0C,0x0D,0x0E,0x0F,0x10,
-    0x11,0x12,0x13,0x14,0x15,0x16,0x17,0x18,
-    0x19,0x1A,0x1B,0x1C,0x1D,0x1E,0x1F,0x20}}
-};
-const size_t NUM_SENDERS = sizeof(senders) / sizeof(senders[0]);
 // ================================
 
 #define PROTOCOL_VERSION 1
@@ -122,16 +106,16 @@ void hmacTrunc16(const uint8_t *key, size_t keyLen, const uint8_t *data, size_t 
   mbedtls_md_free(&ctx);
 }
 
-const SenderConfig *findSender(uint8_t sender_id, const uint8_t mac[6]) {
-  for (size_t i = 0; i < NUM_SENDERS; i++) {
-    if (senders[i].sender_id == sender_id && memcmp(senders[i].mac, mac, 6) == 0) {
-      return &senders[i];
+const SenderSecret *findSender(uint8_t sender_id, const uint8_t mac[6]) {
+  for (size_t i = 0; i < SENDER_SECRETS_COUNT; i++) {
+    if (SENDER_SECRETS[i].sender_id == sender_id && memcmp(SENDER_SECRETS[i].sender_mac, mac, 6) == 0) {
+      return &SENDER_SECRETS[i];
     }
   }
   return nullptr;
 }
 
-void computeChallengeTag(uint8_t out[16], const SenderConfig &sc, uint32_t session_id, const uint8_t nonce[16]) {
+void computeChallengeTag(uint8_t out[16], const SenderSecret &sc, uint32_t session_id, const uint8_t nonce[16]) {
   const char prefix[] = "CHAL";
   uint8_t buf[4 + 1 + 4 + 16 + 6];
   size_t idx = 0;
@@ -143,7 +127,7 @@ void computeChallengeTag(uint8_t out[16], const SenderConfig &sc, uint32_t sessi
   hmacTrunc16(sc.key, sizeof(sc.key), buf, idx, out);
 }
 
-void computeOpenTag(uint8_t out[16], const SenderConfig &sc, uint32_t session_id, const uint8_t nonce[16]) {
+void computeOpenTag(uint8_t out[16], const SenderSecret &sc, uint32_t session_id, const uint8_t nonce[16]) {
   const char prefix[] = "OPEN";
   uint8_t buf[4 + 1 + 4 + 16 + 6];
   size_t idx = 0;
@@ -155,7 +139,7 @@ void computeOpenTag(uint8_t out[16], const SenderConfig &sc, uint32_t session_id
   hmacTrunc16(sc.key, sizeof(sc.key), buf, idx, out);
 }
 
-void computeAckTag(uint8_t out[16], const SenderConfig &sc, uint32_t session_id, uint8_t result_code) {
+void computeAckTag(uint8_t out[16], const SenderSecret &sc, uint32_t session_id, uint8_t result_code) {
   const char prefix[] = "ACK";
   uint8_t buf[3 + 1 + 4 + 1];
   size_t idx = 0;
@@ -166,7 +150,7 @@ void computeAckTag(uint8_t out[16], const SenderConfig &sc, uint32_t session_id,
   hmacTrunc16(sc.key, sizeof(sc.key), buf, idx, out);
 }
 
-void computeDenyTag(uint8_t out[16], const SenderConfig &sc, uint32_t session_id, uint8_t reason_code) {
+void computeDenyTag(uint8_t out[16], const SenderSecret &sc, uint32_t session_id, uint8_t reason_code) {
   const char prefix[] = "DENY";
   uint8_t buf[4 + 1 + 4 + 1];
   size_t idx = 0;
@@ -191,7 +175,7 @@ void sendMessage(const uint8_t *mac, const Message &msg) {
   esp_now_send(mac, (const uint8_t *)&msg, sizeof(Message));
 }
 
-void sendChallenge(const SenderConfig &sc, const uint8_t *mac) {
+void sendChallenge(const SenderSecret &sc, const uint8_t *mac) {
   SessionState &ss = sessions[sc.sender_id % 8];
   ss.session_id = rand32();
   fillRandom(ss.nonce, 16);
@@ -211,7 +195,7 @@ void sendChallenge(const SenderConfig &sc, const uint8_t *mac) {
   setStatusColor(colorGreen());
 }
 
-void sendAck(const SenderConfig &sc, uint32_t session_id, const uint8_t *mac, uint8_t code) {
+void sendAck(const SenderSecret &sc, uint32_t session_id, const uint8_t *mac, uint8_t code) {
   Message msg = {};
   msg.version = PROTOCOL_VERSION;
   msg.type = MSG_OPEN_ACK;
@@ -222,7 +206,7 @@ void sendAck(const SenderConfig &sc, uint32_t session_id, const uint8_t *mac, ui
   sendMessage(mac, msg);
 }
 
-void sendDeny(const SenderConfig &sc, uint32_t session_id, const uint8_t *mac, uint8_t code) {
+void sendDeny(const SenderSecret &sc, uint32_t session_id, const uint8_t *mac, uint8_t code) {
   Message msg = {};
   msg.version = PROTOCOL_VERSION;
   msg.type = MSG_DENY;
@@ -233,12 +217,12 @@ void sendDeny(const SenderConfig &sc, uint32_t session_id, const uint8_t *mac, u
   sendMessage(mac, msg);
 }
 
-void handleHello(const SenderConfig &sc, const uint8_t *mac) {
+void handleHello(const SenderSecret &sc, const uint8_t *mac) {
   lastContactMs[sc.sender_id % 8] = millis();
   sendChallenge(sc, mac);
 }
 
-void handleOpen(const SenderConfig &sc, const uint8_t *mac, const Message &msg) {
+void handleOpen(const SenderSecret &sc, const uint8_t *mac, const Message &msg) {
   lastContactMs[sc.sender_id % 8] = millis();
   SessionState &ss = sessions[sc.sender_id % 8];
   if (msg.session_id != ss.session_id || ss.used || millis() > ss.expires_at) {
@@ -276,7 +260,7 @@ void onDataRecv(const esp_now_recv_info *info, const uint8_t *incomingData, int 
   if (len != (int)sizeof(Message)) return;
   Message msg;
   memcpy(&msg, incomingData, sizeof(Message));
-  const SenderConfig *sc = findSender(msg.sender_id, mac);
+  const SenderSecret *sc = findSender(msg.sender_id, mac);
   if (!sc) {
     logDebug("Unknown sender or MAC mismatch");
     return;
@@ -321,8 +305,8 @@ void setup() {
   esp_now_register_recv_cb(onDataRecv);
   esp_now_register_send_cb(onDataSent);
 
-  for (size_t i = 0; i < NUM_SENDERS; i++) {
-    ensurePeer(senders[i].mac);
+  for (size_t i = 0; i < SENDER_SECRETS_COUNT; i++) {
+    ensurePeer(SENDER_SECRETS[i].sender_mac);
   }
 }
 
