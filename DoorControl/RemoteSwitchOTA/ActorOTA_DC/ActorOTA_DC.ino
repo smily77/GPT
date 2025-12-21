@@ -11,6 +11,7 @@
 // ====== PINS ======
 constexpr uint8_t PIN_RELAY = 10;
 constexpr uint8_t PIN_SENSE = 4; // digital input (voltage divider)
+constexpr uint8_t PIN_RELAY_LED = 8;
 
 // ====== ESP-NOW ======
 // MAC addresses come from doorLockData.h so the controller and actor share the
@@ -55,6 +56,7 @@ unsigned long lastControllerMsg = 0;
 bool otaMode = false;
 bool otaReady = false;
 bool otaSetupAttempted = false;
+constexpr unsigned long OTA_WIFI_TIMEOUT_MS = 7000;
 
 // ====== TIMING ======
 constexpr unsigned long STATUS_INTERVAL_MS = 1000;
@@ -69,6 +71,7 @@ void updatePower() {
 void applyRelay(bool on) {
   relayOn = on && powerOk;
   digitalWrite(PIN_RELAY, relayOn ? HIGH : LOW);
+  digitalWrite(PIN_RELAY_LED, relayOn ? HIGH : LOW);
 }
 
 void sendStatus() {
@@ -139,11 +142,10 @@ void setupOTA() {
 
   if (DEBUG) Serial.println("Connecting to WiFi...");
 
-  int attempts = 0;
-  while (WiFi.status() != WL_CONNECTED && attempts < 30) {
-    delay(500);
+  unsigned long startConnect = millis();
+  while (WiFi.status() != WL_CONNECTED && (millis() - startConnect) < OTA_WIFI_TIMEOUT_MS) {
+    delay(250);
     if (DEBUG) Serial.print(".");
-    attempts++;
   }
 
   if (WiFi.status() == WL_CONNECTED) {
@@ -198,7 +200,9 @@ void setupOTA() {
     otaSetupAttempted = false;
 
     // Re-initialize ESP-NOW
-    WiFi.disconnect();
+    WiFi.disconnect(true, true);
+    WiFi.mode(WIFI_OFF);
+    delay(50);
     setupEspNow();
   }
 }
@@ -221,6 +225,9 @@ void setup() {
   applyRelay(false);
 
   pinMode(PIN_SENSE, INPUT);
+
+  pinMode(PIN_RELAY_LED, OUTPUT);
+  digitalWrite(PIN_RELAY_LED, LOW);
 
   setupEspNow();
 }

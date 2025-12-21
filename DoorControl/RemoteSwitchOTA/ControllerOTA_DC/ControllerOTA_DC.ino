@@ -111,6 +111,7 @@ bool otaMode = false;
 bool otaRequested = false;
 bool otaAckReceived = false;
 bool otaReady = false;
+constexpr unsigned long OTA_WIFI_TIMEOUT_MS = 7000;
 
 // ====== TIMING ======
 constexpr unsigned long STATUS_TIMEOUT_MS = 5000;
@@ -405,11 +406,10 @@ void setupOTA() {
 
   if (DEBUG) Serial << "Connecting to WiFi..." << endl;
 
-  int attempts = 0;
-  while (WiFi.status() != WL_CONNECTED && attempts < 30) {
-    delay(500);
+  unsigned long startConnect = millis();
+  while (WiFi.status() != WL_CONNECTED && (millis() - startConnect) < OTA_WIFI_TIMEOUT_MS) {
+    delay(250);
     if (DEBUG) Serial << "." << endl;
-    attempts++;
   }
 
   if (WiFi.status() == WL_CONNECTED) {
@@ -464,7 +464,9 @@ void setupOTA() {
     otaReady = false;
 
     // Re-initialize ESP-NOW
-    WiFi.disconnect();
+    WiFi.disconnect(true, true);
+    WiFi.mode(WIFI_OFF);
+    delay(50);
     setupEspNow();
     updateDisplay("Ready", true);
   }
