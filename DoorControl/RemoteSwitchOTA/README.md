@@ -7,6 +7,17 @@ RemoteSwitchOTA ist ein verteiltes System bestehend aus zwei ESP32-C3 Geräten:
 1. **Controller**: Benutzer-Interface mit Display, Button und LED
 2. **Actor**: Steuert ein Relais basierend auf Befehlen vom Controller
 
+Zusätzlich gibt es die DoorControl-Edition **ControllerOTA_DC**/**ActorOTA_DC**:
+
+- **ControllerOTA_DC** kombiniert den DoorSender (Garagentor-Öffner) mit dem
+  RemoteSwitch-Controller. Sobald eine Session mit dem DoorReceiver besteht,
+  verhält sich das Gerät wie der DoorSender (kurzer Tastendruck öffnet das Tor);
+  ohne Door-Link arbeitet es wie der RemoteSwitch-Controller. Ein langer
+  Tastendruck (>2s) startet immer den OTA-Ablauf.
+- **ActorOTA_DC** ist der zum ControllerOTA_DC passende Aktor. Beide nutzen die
+  MAC-Adressen aus `doorLockData.h` (Sender 1 für den Controller, `ACTOR_MAC`
+  für den Aktor) und den dort konfigurierten WiFi-Kanal.
+
 Die Kommunikation erfolgt primär über **ESP-NOW** (WiFi-unabhängiges Protokoll). Für OTA-Updates können beide Geräte temporär in den **WiFi-Modus** wechseln und danach automatisch zu ESP-NOW zurückkehren.
 
 ## Hardware-Anforderungen
