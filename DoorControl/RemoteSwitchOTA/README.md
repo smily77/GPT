@@ -17,6 +17,13 @@ Zusätzlich gibt es die DoorControl-Edition **ControllerOTA_DC**/**ActorOTA_DC**
 - **ActorOTA_DC** ist der zum ControllerOTA_DC passende Aktor. Beide nutzen die
   MAC-Adressen aus `doorLockData.h` (Sender 1 für den Controller, `ACTOR_MAC`
   für den Aktor) und den dort konfigurierten WiFi-Kanal.
+- **ControllerOTA_DC_M5** ist eine Variante von ControllerOTA_DC für den
+  **M5Stack Atom S3** (128×128 TFT, interner Button, <M5Unified.h>). Das Verhalten
+  bleibt identisch: Ist der DoorReceiver sichtbar, agiert das Gerät als
+  Garagentoröffner und zeigt ein Garagen-Fernbedienungs-Symbol. Ohne Door-Link
+  steuert es den Actor; der Status wird mit einem Nebelschlussleuchten-Symbol
+  visualisiert (blau bei „Ready“, schwarzes Symbol vor gelbem Hintergrund bei
+  „On“). Ein langer Button-Press (>2s) aktiviert wie gehabt den OTA-Modus.
 
 Die Kommunikation erfolgt primär über **ESP-NOW** (WiFi-unabhängiges Protokoll). Für OTA-Updates können beide Geräte temporär in den **WiFi-Modus** wechseln und danach automatisch zu ESP-NOW zurückkehren.
 
