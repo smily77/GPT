@@ -60,7 +60,7 @@ struct OtaMessage {
 #define MSG_OPEN_ACK 4
 #define MSG_DENY 5
 
-struct __attribute__((packed)) DoorMessage {
+struct DoorMessage {
   uint8_t version;
   uint8_t type;
   uint8_t sender_id;
@@ -68,7 +68,7 @@ struct __attribute__((packed)) DoorMessage {
   uint32_t session_id;
   uint8_t nonce[16];
   uint8_t tag[16];
-};
+} __attribute__((packed));
 
 const SenderSecret *findSenderSecret(uint8_t id) {
   for (size_t i = 0; i < SENDER_SECRETS_COUNT; ++i) {
