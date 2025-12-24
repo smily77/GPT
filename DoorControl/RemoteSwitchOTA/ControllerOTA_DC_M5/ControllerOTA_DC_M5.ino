@@ -37,6 +37,8 @@ constexpr uint8_t MSG_COMMAND = 2;
 constexpr uint8_t MSG_OTA_REQUEST = 3;
 constexpr uint8_t MSG_OTA_ACK = 4;
 
+struct DoorMessage;
+
 struct StatusMessage {
   uint8_t msgType;
   bool relayOn;
