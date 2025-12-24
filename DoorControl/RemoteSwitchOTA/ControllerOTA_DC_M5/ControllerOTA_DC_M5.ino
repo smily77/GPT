@@ -236,6 +236,7 @@ void setDisplay(DisplayMode mode) {
       break;
     case DisplayMode::None:
     default:
+      gfx.fillScreen(COLOR_BG);
       break;
   }
 }
@@ -599,7 +600,7 @@ void setup() {
   memcpy(actorPeerMac, ACTOR_MAC, sizeof(actorPeerMac));
   actorMacKnown = true;
 
-  showReady();
+  setDisplay(DisplayMode::None);
   setupEspNow();
 }
 
@@ -713,13 +714,13 @@ void loop() {
       if (buttonHeld) {
         showNoLink();
       } else {
-        showReady();
+        setDisplay(DisplayMode::None);
       }
     } else if (!powerOk) {
       if (buttonHeld) {
         showNoPower();
       } else {
-        showReady();
+        setDisplay(DisplayMode::None);
       }
     }
   }
