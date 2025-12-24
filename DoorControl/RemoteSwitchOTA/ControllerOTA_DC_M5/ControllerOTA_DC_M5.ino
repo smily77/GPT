@@ -1,3 +1,20 @@
+#define PROTOCOL_VERSION 1
+#define MSG_HELLO 1
+#define MSG_CHALLENGE 2
+#define MSG_OPEN 3
+#define MSG_OPEN_ACK 4
+#define MSG_DENY 5
+
+struct DoorMessage {
+  uint8_t version;
+  uint8_t type;
+  uint8_t sender_id;
+  uint8_t reserved;
+  uint32_t session_id;
+  uint8_t nonce[16];
+  uint8_t tag[16];
+} __attribute__((packed));
+
 #include <Streaming.h>
 
 #include <esp_now.h>
@@ -37,8 +54,6 @@ constexpr uint8_t MSG_COMMAND = 2;
 constexpr uint8_t MSG_OTA_REQUEST = 3;
 constexpr uint8_t MSG_OTA_ACK = 4;
 
-struct DoorMessage;
-
 struct StatusMessage {
   uint8_t msgType;
   bool relayOn;
@@ -53,24 +68,6 @@ struct CommandMessage {
 struct OtaMessage {
   uint8_t msgType;
 };
-
-// DoorSender <-> DoorReceiver handshake
-#define PROTOCOL_VERSION 1
-#define MSG_HELLO 1
-#define MSG_CHALLENGE 2
-#define MSG_OPEN 3
-#define MSG_OPEN_ACK 4
-#define MSG_DENY 5
-
-struct DoorMessage {
-  uint8_t version;
-  uint8_t type;
-  uint8_t sender_id;
-  uint8_t reserved;
-  uint32_t session_id;
-  uint8_t nonce[16];
-  uint8_t tag[16];
-} __attribute__((packed));
 
 const SenderSecret *findSenderSecret(uint8_t id) {
   for (size_t i = 0; i < SENDER_SECRETS_COUNT; ++i) {
