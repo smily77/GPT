@@ -124,6 +124,25 @@ constexpr unsigned long LONG_PRESS_MS = 2000;
 // ====== DISPLAY HELPERS ======
 M5GFX &gfx = M5.Display;
 
+enum class DisplayMode {
+  FogReady,
+  FogOn,
+  Garage,
+  GarageDeny,
+  NoLink,
+  NoPower,
+  OTAReq,
+  GoOTA,
+  OTA,
+  OTAError,
+  Updating,
+  Done,
+  WiFiFail,
+  None
+};
+
+DisplayMode currentDisplay = DisplayMode::None;
+
 void drawCenteredText(const String &text, uint16_t fg, uint16_t bg) {
   gfx.fillScreen(bg);
   gfx.setTextDatum(MC_DATUM);
@@ -171,21 +190,68 @@ void drawGarageRemoteIcon(uint16_t fg, uint16_t bg) {
   gfx.fillCircle(cx, cy, 6, fg);
 }
 
-void updateDisplayReady() {
-  drawFogIcon(COLOR_BG, COLOR_BLUE);
-}
-
-void updateDisplayOn() {
-  drawFogIcon(COLOR_YELLOW, COLOR_BLACK);
-}
-
-void updateDisplayGarage(bool deny) {
-  if (deny) {
-    drawCenteredText("DENY", COLOR_WHITE, COLOR_RED);
-  } else {
-    drawGarageRemoteIcon(COLOR_WHITE, COLOR_BG);
+void setDisplay(DisplayMode mode) {
+  if (mode == currentDisplay) return;
+  currentDisplay = mode;
+  switch (mode) {
+    case DisplayMode::FogReady:
+      drawFogIcon(COLOR_BG, COLOR_BLUE);
+      break;
+    case DisplayMode::FogOn:
+      drawFogIcon(COLOR_YELLOW, COLOR_BLACK);
+      break;
+    case DisplayMode::Garage:
+      drawGarageRemoteIcon(COLOR_WHITE, COLOR_BG);
+      break;
+    case DisplayMode::GarageDeny:
+      drawCenteredText("DENY", COLOR_WHITE, COLOR_RED);
+      break;
+    case DisplayMode::NoLink:
+      drawCenteredText("No Link", COLOR_WHITE, COLOR_BG);
+      break;
+    case DisplayMode::NoPower:
+      drawCenteredText("No Power", COLOR_WHITE, COLOR_BG);
+      break;
+    case DisplayMode::OTAReq:
+      drawCenteredText("OTA req.", COLOR_WHITE, COLOR_BG);
+      break;
+    case DisplayMode::GoOTA:
+      drawCenteredText("go OTA", COLOR_WHITE, COLOR_BG);
+      break;
+    case DisplayMode::OTA:
+      drawCenteredText("OTA", COLOR_WHITE, COLOR_BG);
+      break;
+    case DisplayMode::OTAError:
+      drawCenteredText("OTA Error", COLOR_WHITE, COLOR_RED);
+      break;
+    case DisplayMode::Updating:
+      drawCenteredText("Updating", COLOR_WHITE, COLOR_BG);
+      break;
+    case DisplayMode::Done:
+      drawCenteredText("Done", COLOR_WHITE, COLOR_BG);
+      break;
+    case DisplayMode::WiFiFail:
+      drawCenteredText("WiFi Fail", COLOR_WHITE, COLOR_RED);
+      break;
+    case DisplayMode::None:
+    default:
+      break;
   }
 }
+
+// Convenience wrappers to keep call sites readable
+void showReady() { setDisplay(DisplayMode::FogReady); }
+void showOn() { setDisplay(DisplayMode::FogOn); }
+void showGarage(bool deny) { setDisplay(deny ? DisplayMode::GarageDeny : DisplayMode::Garage); }
+void showNoLink() { setDisplay(DisplayMode::NoLink); }
+void showNoPower() { setDisplay(DisplayMode::NoPower); }
+void showOtaReq() { setDisplay(DisplayMode::OTAReq); }
+void showGoOta() { setDisplay(DisplayMode::GoOTA); }
+void showOta() { setDisplay(DisplayMode::OTA); }
+void showOtaError() { setDisplay(DisplayMode::OTAError); }
+void showUpdating() { setDisplay(DisplayMode::Updating); }
+void showDone() { setDisplay(DisplayMode::Done); }
+void showWifiFail() { setDisplay(DisplayMode::WiFiFail); }
 
 bool constantTimeEqual(const uint8_t *a, const uint8_t *b, size_t len) {
   uint8_t diff = 0;
@@ -320,7 +386,7 @@ void handleDeny(const DoorMessage &msg) {
   openPending = false;
   denyUntil = true;
   denyUntilMs = millis() + DENY_DISPLAY_MS;
-  updateDisplayGarage(true);
+  showGarage(true);
 }
 
 void onSend(const uint8_t *mac_addr, esp_now_send_status_t status) {
@@ -445,12 +511,12 @@ void setupOTA() {
     ArduinoOTA.onStart([]() {
       String type = (ArduinoOTA.getCommand() == U_FLASH) ? "sketch" : "filesystem";
       if (DEBUG) Serial << "Start updating " << type << endl;
-      drawCenteredText("Updating", COLOR_WHITE, COLOR_BG);
+      showUpdating();
     });
 
     ArduinoOTA.onEnd([]() {
       if (DEBUG) Serial << "\nEnd" << endl;
-      drawCenteredText("Done", COLOR_WHITE, COLOR_BG);
+      showDone();
     });
 
     ArduinoOTA.onProgress([](unsigned int progress, unsigned int total) {
@@ -466,17 +532,17 @@ void setupOTA() {
         else if (error == OTA_RECEIVE_ERROR) Serial << "Receive Failed" << endl;
         else if (error == OTA_END_ERROR) Serial << "End Failed" << endl;
       }
-      drawCenteredText("OTA Error", COLOR_WHITE, COLOR_RED);
+      showOtaError();
     });
 
     ArduinoOTA.begin();
     otaReady = true;
-    drawCenteredText("OTA", COLOR_WHITE, COLOR_BG);
+    showOta();
     if (DEBUG) Serial << "OTA Ready" << endl;
   } else {
     // WiFi connection failed - return to normal operation
     if (DEBUG) Serial << "WiFi connection failed - returning to normal mode" << endl;
-    drawCenteredText("WiFi Fail", COLOR_WHITE, COLOR_RED);
+    showWifiFail();
     delay(2000);
 
     // Reset OTA state
@@ -490,7 +556,7 @@ void setupOTA() {
     WiFi.mode(WIFI_OFF);
     delay(50);
     setupEspNow();
-    updateDisplayReady();
+    showReady();
   }
 }
 
@@ -532,7 +598,7 @@ void setup() {
   memcpy(actorPeerMac, ACTOR_MAC, sizeof(actorPeerMac));
   actorMacKnown = true;
 
-  updateDisplayReady();
+  showReady();
   setupEspNow();
 }
 
@@ -552,7 +618,7 @@ void handleButton(bool doorLink, bool denyActive) {
       otaMode = true;
       otaRequested = true;
       otaAckReceived = false;
-      drawCenteredText("OTA req.", COLOR_WHITE, COLOR_BG);
+      showOtaReq();
       sendOtaRequest();
     }
   }
@@ -592,7 +658,7 @@ void loop() {
     openPending = false;
     denyUntil = true;
     denyUntilMs = now + DENY_DISPLAY_MS;
-    updateDisplayGarage(true);
+    showGarage(true);
   }
   if (denyUntil && now > denyUntilMs) {
     denyUntil = false;
@@ -612,7 +678,7 @@ void loop() {
       }
     } else if (otaAckReceived && !otaReady) {
       // Actor acknowledged, show "go OTA" and start WiFi connection
-      drawCenteredText("go OTA", COLOR_WHITE, COLOR_BG);
+      showGoOta();
       delay(1000);
       setupOTA();
     }
@@ -628,7 +694,7 @@ void loop() {
   handleButton(doorLink, denyUntil);
 
   if (doorLink) {
-    updateDisplayGarage(denyUntil);
+    showGarage(denyUntil);
   } else if (linkOk && powerOk) {
     bool needResend = (desiredRelayState != relayOn) || (now - lastCommandSentMs > COMMAND_INTERVAL_MS) || (lastSentCommandState != desiredRelayState);
     if (needResend) {
@@ -636,15 +702,24 @@ void loop() {
     }
 
     if (relayOn) {
-      updateDisplayOn();
+      showOn();
     } else {
-      updateDisplayReady();
+      showReady();
     }
   } else {
+    bool buttonHeld = M5.BtnA.isPressed();
     if (!linkOk) {
-      drawCenteredText("No Link", COLOR_WHITE, COLOR_BG);
+      if (buttonHeld) {
+        showNoLink();
+      } else {
+        showReady();
+      }
     } else if (!powerOk) {
-      drawCenteredText("No Power", COLOR_WHITE, COLOR_BG);
+      if (buttonHeld) {
+        showNoPower();
+      } else {
+        showReady();
+      }
     }
   }
 }
