@@ -1,3 +1,15 @@
+#include <Arduino.h>
+#include <Streaming.h>
+
+#include <esp_now.h>
+#include <esp_wifi.h>
+#include <WiFi.h>
+#include <ArduinoOTA.h>
+#include <Credentials.h>
+#include <mbedtls/md.h>
+#include <doorLockData.h>
+#include <M5Unified.h>
+
 #define PROTOCOL_VERSION 1
 #define MSG_HELLO 1
 #define MSG_CHALLENGE 2
@@ -14,18 +26,6 @@ struct DoorMessage {
   uint8_t nonce[16];
   uint8_t tag[16];
 } __attribute__((packed));
-
-#include <Streaming.h>
-
-#include <esp_now.h>
-#include <esp_wifi.h>
-#include <WiFi.h>
-#include <Arduino.h>
-#include <ArduinoOTA.h>
-#include <Credentials.h>
-#include <mbedtls/md.h>
-#include <doorLockData.h>
-#include <M5Unified.h>
 
 #define DEBUG false
 
