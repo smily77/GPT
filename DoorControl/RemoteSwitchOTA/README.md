@@ -24,6 +24,13 @@ Zusätzlich gibt es die DoorControl-Edition **ControllerOTA_DC**/**ActorOTA_DC**
   steuert es den Actor; der Status wird mit einem Nebelschlussleuchten-Symbol
   visualisiert (blau bei „Ready“, schwarzes Symbol vor gelbem Hintergrund bei
   „On“). Ein langer Button-Press (>2s) aktiviert wie gehabt den OTA-Modus.
+- **ControllerOTA_DC_GEN** vereinigt die beiden Controller-Varianten in einer
+  generischen Fassung. Über `#define Atom3` (M5Stack Atom S3) oder
+  `#define Original` (ESP32-C3 + SSD1306) in `doorLockData.h` wird zur
+  gewünschten Plattform kompiliert, die restliche Logik bleibt identisch.
+- **ActorOTA_DC** ist der zum ControllerOTA_DC passende Aktor. Beide nutzen die
+  MAC-Adressen aus `doorLockData.h` (Sender 1 für den Controller, `ACTOR_MAC`
+  für den Aktor) und den dort konfigurierten WiFi-Kanal.
 
 Die Kommunikation erfolgt primär über **ESP-NOW** (WiFi-unabhängiges Protokoll). Für OTA-Updates können beide Geräte temporär in den **WiFi-Modus** wechseln und danach automatisch zu ESP-NOW zurückkehren.
 

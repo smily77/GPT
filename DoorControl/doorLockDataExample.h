@@ -6,6 +6,10 @@
 // and replace MAC addresses and keys with your own values. Keep doorLockData.h
 // out of version control.
 
+// Platform selection for ControllerOTA_DC_GEN (exactly one define):
+// #define Atom3     // M5Stack Atom S3 + M5Unified
+// #define Original  // ESP32-C3 + SSD1306 + GPIO button/LED
+
 #define WIFI_CHANNEL 6
 
 struct SenderSecret {
