@@ -28,6 +28,38 @@ enum class DisplayMode {
 #include <doorLockData.h>
 #include <M5Unified.h>
 
+/*
+  ControllerOTA_DC_M5 functional outline (Atom S3)
+  ------------------------------------------------
+  - Hardware: Atom S3 (M5Unified), built-in button (BtnA) and 128x128 TFT.
+  - Roles:
+      * DoorSender role if a valid DoorReceiver session is active.
+      * RemoteSwitch controller role if no DoorReceiver session is active but the Actor is reachable.
+      * OTA initiator on long-press (>2s) of BtnA.
+  - Display behavior (flicker-free via DisplayMode state machine):
+      * Garage link active: white garage-remote icon, red DENY overlay when denyUntil is true.
+      * RemoteSwitch link/power OK: fog icon blue (ready) or yellow background/black icon (relay on).
+      * No link/power: screen blank unless BtnA is held; then show "No Link"/"No Power".
+      * OTA states: "OTA req.", "go OTA", "OTA", "OTA Error", "Updating", "Done", "WiFi Fail".
+      * Idle default: cleared screen (DisplayMode::None) so stale icons do not linger.
+  - Button handling:
+      * Short press (<2s):
+          - If doorLink && !denyUntil: send DoorSender open.
+          - Else if no doorLink && linkOk && powerOk: toggle desiredRelay and command Actor.
+      * Long press (>=2s) when not in OTA: start OTA sequence (request Actor OTA, then WiFi/ArduinoOTA).
+  - ESP-NOW / Door control:
+      * Uses SenderSecret sender_id = CONTROLLER_SENDER_ID and RECEIVER_MAC from doorLockData.h.
+      * Maintains DoorSender handshake (HELLO/CHALLENGE/OPEN/ACK/DENY) and session TTL/deny timers.
+      * Tracks Actor MAC from doorLockData.h (ACTOR_MAC) and refreshes from inbound status frames.
+  - OTA flow:
+      * Long press triggers MSG_OTA_REQUEST to Actor; waits for MSG_OTA_ACK.
+      * On ACK, shows "go OTA", switches Wi-Fi STA, ArduinoOTA.begin().
+      * Wi-Fi failure resets OTA flags and reinitializes ESP-NOW.
+  - Status handling:
+      * Expects periodic Actor StatusMessage; sets linkOk/powerOk/relayOn, times out after 5s.
+      * Command resend every 1s if desiredRelay differs from actual or last send is stale.
+*/
+
 #define PROTOCOL_VERSION 1
 #define MSG_HELLO 1
 #define MSG_CHALLENGE 2
