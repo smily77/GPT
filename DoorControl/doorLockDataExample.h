@@ -6,6 +6,10 @@
 // and replace MAC addresses and keys with your own values. Keep doorLockData.h
 // out of version control.
 
+// Platform selection for ControllerOTA_DC_GEN (exactly one define):
+// #define Atom3     // M5Stack Atom S3 + M5Unified
+// #define Original  // ESP32-C3 + SSD1306 + GPIO button/LED
+
 #define WIFI_CHANNEL 6
 
 struct SenderSecret {
@@ -16,6 +20,9 @@ struct SenderSecret {
 
 // Receiver station MAC address
 static const uint8_t RECEIVER_MAC[6] = {0x50, 0x78, 0x7D, 0x52, 0xD8, 0xA8};
+
+// Dedicated MAC for the RemoteSwitch actor (ESP32-C3 relay target)
+static const uint8_t ACTOR_MAC[6] = {0x24, 0x6F, 0x28, 0xAA, 0xAA, 0x02};
 
 // Allowed senders (example entries)
 static const SenderSecret SENDER_SECRETS[] = {
@@ -42,3 +49,6 @@ static const SenderSecret SENDER_SECRETS[] = {
 };
 
 static const size_t SENDER_SECRETS_COUNT = sizeof(SENDER_SECRETS) / sizeof(SENDER_SECRETS[0]);
+
+// Controller/RemoteSwitch uses sender_id = 1
+static const uint8_t CONTROLLER_SENDER_ID = 1;
