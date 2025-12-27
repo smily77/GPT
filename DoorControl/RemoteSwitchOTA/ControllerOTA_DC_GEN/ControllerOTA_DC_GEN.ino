@@ -141,9 +141,10 @@ bool otaReady = false;
 constexpr unsigned long OTA_WIFI_TIMEOUT_MS = 7000;
 
 // ====== TIMING ======
-constexpr unsigned long STATUS_TIMEOUT_MS = 12000;
+constexpr unsigned long STATUS_TIMEOUT_MS = 5000;
 constexpr unsigned long COMMAND_INTERVAL_MS = 1000;
 unsigned long lastCommandSentMs = 0;
+uint8_t missedStatusCount = 0;
 
 constexpr unsigned long IN_RANGE_TIMEOUT_MS = 8000;
 constexpr unsigned long SESSION_TTL_MS = 15000;
@@ -612,6 +613,7 @@ void onReceive(const esp_now_recv_info_t *info, const uint8_t *data, int len) {
     powerOk = incoming.powerOk;
     linkOk = true;
     lastStatusMs = millis();
+    missedStatusCount = 0;
 
     if (!desiredRelayState && relayOn) {
       desiredRelayState = relayOn;
@@ -957,9 +959,12 @@ void loop() {
     return;
   }
 
-  if (linkOk && now - lastStatusMs > STATUS_TIMEOUT_MS) {
-    linkOk = false;
-    powerOk = false;
+  if (now - lastStatusMs > STATUS_TIMEOUT_MS) {
+    if (missedStatusCount < 3) missedStatusCount++;
+    if (missedStatusCount >= 2) {
+      linkOk = false;
+      powerOk = false;
+    }
   }
 
   handleButton(doorLink, denyUntil);
