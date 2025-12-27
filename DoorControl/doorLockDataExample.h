@@ -7,8 +7,9 @@
 // out of version control.
 
 // Platform selection for ControllerOTA_DC_GEN (exactly one define):
-// #define Atom3     // M5Stack Atom S3 + M5Unified
-// #define Original  // ESP32-C3 + SSD1306 + GPIO button/LED
+// #define Atom3         // M5Stack Atom S3 + M5Unified
+// #define Original      // ESP32-C3 + SSD1306 + GPIO button/LED
+// #define Switch_Light  // ESP32-C3 + dual GPIO LEDs + NeoPixel status
 
 #define WIFI_CHANNEL 6
 

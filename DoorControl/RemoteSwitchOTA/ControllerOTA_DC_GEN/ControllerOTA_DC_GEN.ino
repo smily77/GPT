@@ -31,8 +31,10 @@ enum class DisplayMode {
   #define PLATFORM_ATOM3 1
 #elif defined(Original)
   #define PLATFORM_ORIGINAL 1
+#elif defined(Switch_Light)
+  #define PLATFORM_SWITCH_LIGHT 1
 #else
-  #error "Define Atom3 or Original in doorLockData.h for ControllerOTA_DC_GEN"
+  #error "Define Atom3, Original, or Switch_Light in doorLockData.h for ControllerOTA_DC_GEN"
 #endif
 
 #if PLATFORM_ATOM3
@@ -42,6 +44,8 @@ enum class DisplayMode {
   #include <Adafruit_GFX.h>
   #include <Adafruit_SSD1306.h>
   #include <Fonts/FreeSansBold12pt7b.h>
+#elif PLATFORM_SWITCH_LIGHT
+  #include <Adafruit_NeoPixel.h>
 #endif
 
 #define DEBUG false
@@ -299,6 +303,112 @@ void setDisplay(DisplayMode mode) {
       drawTextCenter("", false);
       break;
   }
+}
+
+// Convenience wrappers
+void showReady() { setDisplay(DisplayMode::FogReady); }
+void showOn() { setDisplay(DisplayMode::FogOn); }
+void showGarage(bool deny) { setDisplay(deny ? DisplayMode::GarageDeny : DisplayMode::Garage); }
+void showNoLink() { setDisplay(DisplayMode::NoLink); }
+void showNoPower() { setDisplay(DisplayMode::NoPower); }
+void showOtaReq() { setDisplay(DisplayMode::OTAReq); }
+void showGoOta() { setDisplay(DisplayMode::GoOTA); }
+void showOta() { setDisplay(DisplayMode::OTA); }
+void showOtaError() { setDisplay(DisplayMode::OTAError); }
+void showUpdating() { setDisplay(DisplayMode::Updating); }
+void showDone() { setDisplay(DisplayMode::Done); }
+void showWifiFail() { setDisplay(DisplayMode::WiFiFail); }
+
+#elif PLATFORM_SWITCH_LIGHT
+// ====== DISPLAY / INPUT (Switch_Light: GPIO LEDs + single pixel) ======
+constexpr uint8_t PIN_BLUE = 6;
+constexpr uint8_t PIN_YELLOW = 5;
+constexpr uint8_t PIN_BUTTON = 7; // active LOW
+constexpr uint8_t PIN_PIXEL = 8;
+
+constexpr uint16_t BLINK_FAST_MS = 150;
+constexpr uint16_t BLINK_SLOW_MS = 500;
+
+Adafruit_NeoPixel indicator(1, PIN_PIXEL, NEO_GRB + NEO_KHZ800);
+DisplayMode currentDisplay = DisplayMode::OTA;
+
+bool lastBlueState = false;
+bool lastYellowState = false;
+bool lastReadingSwitch = HIGH;
+bool buttonStateSwitch = HIGH;
+unsigned long lastDebounceSwitch = 0;
+constexpr unsigned long DEBOUNCE_SWITCH_MS = 40;
+
+void applySwitchLightOutputs(bool blue, bool yellow) {
+  if (blue != lastBlueState) {
+    digitalWrite(PIN_BLUE, blue ? HIGH : LOW);
+    lastBlueState = blue;
+  }
+  if (yellow != lastYellowState) {
+    digitalWrite(PIN_YELLOW, yellow ? HIGH : LOW);
+    lastYellowState = yellow;
+  }
+
+  uint8_t r = yellow ? 255 : 0;
+  uint8_t g = yellow ? 200 : 0;
+  uint8_t b = blue ? 255 : 0;
+  indicator.setPixelColor(0, indicator.Color(r, g, b));
+  indicator.show();
+}
+
+void updateSwitchLightOutputs(unsigned long now, bool force = false) {
+  static unsigned long lastUpdateMs = 0;
+  if (!force && (now - lastUpdateMs < 20)) return;
+  lastUpdateMs = now;
+
+  bool blueOn = false;
+  bool yellowOn = false;
+  bool blinkBlue = false;
+  bool blinkYellow = false;
+  bool blinkOpposite = false;
+  uint16_t period = BLINK_SLOW_MS;
+
+  switch (currentDisplay) {
+    case DisplayMode::FogReady:
+      blueOn = true; yellowOn = false; break;
+    case DisplayMode::FogOn:
+      blueOn = true; yellowOn = true; break;
+    case DisplayMode::Garage:
+      blueOn = false; blinkYellow = true; period = BLINK_SLOW_MS; break;
+    case DisplayMode::GarageDeny:
+      blueOn = false; blinkYellow = true; period = BLINK_FAST_MS; break;
+    case DisplayMode::NoLink:
+    case DisplayMode::NoPower:
+    case DisplayMode::Done:
+    case DisplayMode::None:
+      blueOn = false; yellowOn = false; break;
+    case DisplayMode::OTAReq:
+      blinkBlue = true; blinkYellow = true; blinkOpposite = true; period = BLINK_SLOW_MS; break;
+    case DisplayMode::GoOTA:
+      blinkBlue = true; blinkYellow = true; blinkOpposite = false; period = BLINK_SLOW_MS; break;
+    case DisplayMode::OTA:
+      blinkBlue = true; blinkYellow = false; period = BLINK_SLOW_MS; yellowOn = true; break;
+    case DisplayMode::OTAError:
+      blinkBlue = true; blinkYellow = true; blinkOpposite = true; period = BLINK_FAST_MS; break;
+    case DisplayMode::Updating:
+      blinkBlue = true; blinkYellow = false; period = BLINK_SLOW_MS; yellowOn = true; break;
+    case DisplayMode::WiFiFail:
+      blinkBlue = true; blinkYellow = true; blinkOpposite = false; period = BLINK_FAST_MS; break;
+  }
+
+  if (blinkBlue || blinkYellow) {
+    bool phase = ((now / period) % 2) != 0;
+    if (blinkBlue) blueOn = phase;
+    if (blinkYellow) yellowOn = blinkOpposite ? !phase : phase;
+  }
+
+  applySwitchLightOutputs(blueOn, yellowOn);
+}
+
+void setDisplay(DisplayMode mode) {
+  if (mode == currentDisplay) return;
+  currentDisplay = mode;
+  updateSwitchLightOutputs(millis(), true);
 }
 
 // Convenience wrappers
@@ -641,6 +751,17 @@ void setup() {
     display.clearDisplay();
     display.ssd1306_command(SSD1306_DISPLAYOFF);
   }
+#elif PLATFORM_SWITCH_LIGHT
+  Serial.begin(115200);
+  delay(500);
+  pinMode(PIN_BLUE, OUTPUT);
+  pinMode(PIN_YELLOW, OUTPUT);
+  pinMode(PIN_BUTTON, INPUT_PULLUP);
+  digitalWrite(PIN_BLUE, LOW);
+  digitalWrite(PIN_YELLOW, LOW);
+  indicator.begin();
+  indicator.clear();
+  indicator.show();
 #endif
 
 #if PLATFORM_ATOM3
@@ -663,7 +784,7 @@ void setup() {
   setupEspNow();
 }
 
-#if defined(Atom3)
+#if PLATFORM_ATOM3
 void handleButton(bool doorLink, bool denyActive) {
   if (M5.BtnA.wasPressed()) {
     buttonPressStartTime = millis();
@@ -735,6 +856,47 @@ void handleButton(bool doorLink, bool denyActive) {
 
   lastReading = reading;
 }
+#elif PLATFORM_SWITCH_LIGHT
+void handleButton(bool doorLink, bool denyActive) {
+  int reading = digitalRead(PIN_BUTTON);
+  if (reading != lastReadingSwitch) {
+    lastDebounceSwitch = millis();
+  }
+
+  if ((millis() - lastDebounceSwitch) > DEBOUNCE_SWITCH_MS) {
+    if (reading != buttonStateSwitch) {
+      buttonStateSwitch = reading;
+      if (buttonStateSwitch == LOW) {
+        buttonPressStartTime = millis();
+        buttonLongPressHandled = false;
+      } else {
+        unsigned long pressDuration = millis() - buttonPressStartTime;
+        if (!buttonLongPressHandled && pressDuration < LONG_PRESS_MS) {
+          if (!otaMode && doorLink && !denyActive) {
+            sendOpen();
+          } else if (!otaMode && !doorLink && linkOk && powerOk) {
+            desiredRelayState = !relayOn;
+            sendCommand(desiredRelayState);
+          }
+        }
+      }
+    }
+  }
+
+  if (buttonStateSwitch == LOW && !buttonLongPressHandled && !otaMode) {
+    unsigned long pressDuration = millis() - buttonPressStartTime;
+    if (pressDuration >= LONG_PRESS_MS) {
+      buttonLongPressHandled = true;
+      otaMode = true;
+      otaRequested = true;
+      otaAckReceived = false;
+      showOtaReq();
+      sendOtaRequest();
+    }
+  }
+
+  lastReadingSwitch = reading;
+}
 #endif
 
 void loop() {
@@ -780,6 +942,9 @@ void loop() {
       delay(1000);
       setupOTA();
     }
+#if PLATFORM_SWITCH_LIGHT
+    updateSwitchLightOutputs(now);
+#endif
     return;
   }
 
@@ -816,6 +981,8 @@ void loop() {
       M5.BtnA.isPressed();
 #elif PLATFORM_ORIGINAL
       digitalRead(PIN_BUTTON) == LOW;
+#elif PLATFORM_SWITCH_LIGHT
+      digitalRead(PIN_BUTTON) == LOW;
 #endif
 
     if (!linkOk) {
@@ -836,4 +1003,8 @@ void loop() {
     ledcWrite(PIN_LED, 0);
 #endif
   }
+
+#if PLATFORM_SWITCH_LIGHT
+  updateSwitchLightOutputs(now);
+#endif
 }
