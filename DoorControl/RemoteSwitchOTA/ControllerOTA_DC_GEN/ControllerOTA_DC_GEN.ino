@@ -46,6 +46,8 @@ enum class DisplayMode {
   #include <Fonts/FreeSansBold12pt7b.h>
 #elif PLATFORM_SWITCH_LIGHT
   #include <Adafruit_NeoPixel.h>
+#elif PLATFORM_REMOTE
+  #include <esp_sleep.h>
 #endif
 
 #define DEBUG false
@@ -431,6 +433,23 @@ void showOtaError() { setDisplay(DisplayMode::OTAError); }
 void showUpdating() { setDisplay(DisplayMode::Updating); }
 void showDone() { setDisplay(DisplayMode::Done); }
 void showWifiFail() { setDisplay(DisplayMode::WiFiFail); }
+#elif PLATFORM_REMOTE
+// ====== DISPLAY / INPUT (Remote: Door-only, GPIO LED) ======
+constexpr uint8_t PIN_REMOTE_LED = 6;
+
+inline void setDisplay(DisplayMode) {}
+inline void showReady() {}
+inline void showOn() {}
+inline void showGarage(bool) {}
+inline void showNoLink() {}
+inline void showNoPower() {}
+inline void showOtaReq() {}
+inline void showGoOta() {}
+inline void showOta() {}
+inline void showOtaError() {}
+inline void showUpdating() {}
+inline void showDone() {}
+inline void showWifiFail() {}
 #endif
 
 bool constantTimeEqual(const uint8_t *a, const uint8_t *b, size_t len) {
@@ -771,6 +790,11 @@ void setup() {
   indicator.begin();
   indicator.clear();
   indicator.show();
+#elif PLATFORM_REMOTE
+  Serial.begin(115200);
+  delay(200);
+  pinMode(PIN_REMOTE_LED, OUTPUT);
+  digitalWrite(PIN_REMOTE_LED, LOW);
 #endif
 
 #if PLATFORM_ATOM3
@@ -791,6 +815,62 @@ void setup() {
 
   setDisplay(DisplayMode::None);
   setupEspNow();
+
+#if PLATFORM_REMOTE
+  auto attemptOpen = []() -> bool {
+    sessionValid = false;
+    openPending = false;
+    denyUntil = false;
+    unsigned long startMs = millis();
+    unsigned long lastHello = 0;
+    bool sentOpen = false;
+    while (millis() - startMs < 5000) {
+      unsigned long now = millis();
+      if (now - lastHello > HELLO_INTERVAL_MS) {
+        sendHello();
+        lastHello = now;
+      }
+
+      if (sessionValid && (now - sessionStartMs < IN_RANGE_TIMEOUT_MS)) {
+        if (!sentOpen) {
+          sendOpen();
+          sentOpen = true;
+        }
+        if (openPending && (now - openSentMs > OPEN_TIMEOUT_MS)) {
+          openPending = false;
+          denyUntil = true;
+          denyUntilMs = now + DENY_DISPLAY_MS;
+        }
+        if (!openPending && sentOpen && !denyUntil) {
+          return true;
+        }
+      }
+
+      if (denyUntil && now > denyUntilMs) {
+        denyUntil = false;
+        return false;
+      }
+      delay(20);
+    }
+    return false;
+  };
+
+  bool success = false;
+  for (int attempt = 0; attempt < 3 && !success; ++attempt) {
+    success = attemptOpen();
+    if (!success) delay(200);
+  }
+
+  if (success) {
+    digitalWrite(PIN_REMOTE_LED, HIGH);
+    delay(100);
+    digitalWrite(PIN_REMOTE_LED, LOW);
+  }
+
+  digitalWrite(PIN_REMOTE_LED, LOW);
+  esp_sleep_enable_timer_wakeup(5ULL * 1000000ULL); // 5s guard
+  esp_deep_sleep_start();
+#endif
 }
 
 #if PLATFORM_ATOM3
@@ -910,6 +990,11 @@ void handleButton(bool doorLink, bool denyActive) {
 }
 #endif
 
+#if PLATFORM_REMOTE
+void loop() {
+  esp_deep_sleep_start();
+}
+#else
 void loop() {
 #if PLATFORM_ATOM3
   M5.update();
@@ -1022,3 +1107,4 @@ void loop() {
   updateSwitchLightOutputs(now);
 #endif
 }
+#endif
