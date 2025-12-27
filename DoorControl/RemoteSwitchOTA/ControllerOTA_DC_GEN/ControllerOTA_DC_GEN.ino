@@ -141,7 +141,7 @@ bool otaReady = false;
 constexpr unsigned long OTA_WIFI_TIMEOUT_MS = 7000;
 
 // ====== TIMING ======
-constexpr unsigned long STATUS_TIMEOUT_MS = 5000;
+constexpr unsigned long STATUS_TIMEOUT_MS = 12000;
 constexpr unsigned long COMMAND_INTERVAL_MS = 1000;
 unsigned long lastCommandSentMs = 0;
 
@@ -324,6 +324,7 @@ void showWifiFail() { setDisplay(DisplayMode::WiFiFail); }
 constexpr uint8_t PIN_BLUE = 6;
 constexpr uint8_t PIN_YELLOW = 5;
 constexpr uint8_t PIN_BUTTON = 7; // active LOW
+constexpr uint8_t PIN_BUTTON_ALT = 9; // active LOW (test harness)
 constexpr uint8_t PIN_PIXEL = 8;
 
 constexpr uint16_t BLINK_FAST_MS = 150;
@@ -338,6 +339,7 @@ bool lastReadingSwitch = HIGH;
 bool buttonStateSwitch = HIGH;
 unsigned long lastDebounceSwitch = 0;
 constexpr unsigned long DEBOUNCE_SWITCH_MS = 40;
+constexpr uint8_t PIXEL_BRIGHTNESS_PCT = 30; // 30% brightness
 
 void applySwitchLightOutputs(bool blue, bool yellow) {
   if (blue != lastBlueState) {
@@ -352,6 +354,10 @@ void applySwitchLightOutputs(bool blue, bool yellow) {
   uint8_t r = yellow ? 255 : 0;
   uint8_t g = yellow ? 200 : 0;
   uint8_t b = blue ? 255 : 0;
+  uint8_t scale = (PIXEL_BRIGHTNESS_PCT * 255) / 100;
+  r = (uint16_t(r) * scale) / 255;
+  g = (uint16_t(g) * scale) / 255;
+  b = (uint16_t(b) * scale) / 255;
   indicator.setPixelColor(0, indicator.Color(r, g, b));
   indicator.show();
 }
@@ -757,6 +763,7 @@ void setup() {
   pinMode(PIN_BLUE, OUTPUT);
   pinMode(PIN_YELLOW, OUTPUT);
   pinMode(PIN_BUTTON, INPUT_PULLUP);
+  pinMode(PIN_BUTTON_ALT, INPUT_PULLUP);
   digitalWrite(PIN_BLUE, LOW);
   digitalWrite(PIN_YELLOW, LOW);
   indicator.begin();
@@ -858,7 +865,9 @@ void handleButton(bool doorLink, bool denyActive) {
 }
 #elif PLATFORM_SWITCH_LIGHT
 void handleButton(bool doorLink, bool denyActive) {
-  int reading = digitalRead(PIN_BUTTON);
+  int readingMain = digitalRead(PIN_BUTTON);
+  int readingAlt = digitalRead(PIN_BUTTON_ALT);
+  int reading = (readingMain == LOW || readingAlt == LOW) ? LOW : HIGH;
   if (reading != lastReadingSwitch) {
     lastDebounceSwitch = millis();
   }
