@@ -24,7 +24,8 @@ Zusätzlich gibt es die DoorControl-Edition **ControllerOTA_DC**/**ActorOTA_DC**
 - **ControllerOTA_DC_GEN** vereinigt die beiden Controller-Varianten in einer
   generischen Fassung. Über `#define Atom3` (M5Stack Atom S3) oder
   `#define Original` (ESP32-C3 + SSD1306) oder `#define Switch_Light`
-  (ESP32-C3 mit zweifarbigen LEDs + NeoPixel) in `doorLockData.h` wird zur
+  (ESP32-C3 mit zweifarbigen LEDs + NeoPixel) oder `#define Remote`
+  (ESP32-C3 Door-Only Remote, Deep-Sleep nach Aktion) in `doorLockData.h` wird zur
   gewünschten Plattform kompiliert, die restliche Logik bleibt identisch.
 - **ActorOTA_DC** ist der zum ControllerOTA_DC passende Aktor. Beide nutzen die
   MAC-Adressen aus `doorLockData.h` (Sender 1 für den Controller, `ACTOR_MAC`

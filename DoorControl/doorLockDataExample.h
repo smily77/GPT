@@ -10,6 +10,7 @@
 // #define Atom3         // M5Stack Atom S3 + M5Unified
 // #define Original      // ESP32-C3 + SSD1306 + GPIO button/LED
 // #define Switch_Light  // ESP32-C3 + dual GPIO LEDs + NeoPixel status
+// #define Remote        // ESP32-C3 door-only remote (deep sleep after trigger)
 
 #define WIFI_CHANNEL 6
 
