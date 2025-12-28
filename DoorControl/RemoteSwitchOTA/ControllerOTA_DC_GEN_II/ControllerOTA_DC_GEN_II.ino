@@ -823,7 +823,10 @@ void setupOTA() {
   }
 }
 
-#if !PLATFORM_REMOTE
+#if PLATFORM_REMOTE
+void sendCommand(bool) {}
+void sendOtaRequest() {}
+#else
 void sendCommand(bool state) {
   if (!actorMacKnown) return;
   CommandMessage msg{MSG_COMMAND, state};
@@ -1155,6 +1158,8 @@ void loop() {
       digitalRead(PIN_BUTTON) == LOW;
 #elif PLATFORM_SWITCH_LIGHT
       digitalRead(PIN_BUTTON) == LOW;
+#elif PLATFORM_REMOTE
+      false;
 #endif
 
     if (!linkOk) {
