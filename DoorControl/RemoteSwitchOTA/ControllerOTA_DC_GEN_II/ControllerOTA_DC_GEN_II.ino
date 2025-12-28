@@ -176,6 +176,7 @@ bool successLedOn = false;
 unsigned long successLedStartMs = 0;
 unsigned long remoteStartMs = 0;
 constexpr unsigned long REMOTE_MAX_OPERATION_MS = SESSION_TTL_MS + IN_RANGE_TIMEOUT_MS;
+constexpr unsigned long REMOTE_NO_LINK_SLEEP_MS = HELLO_INTERVAL_MS * 2;
 #endif
 
 #if PLATFORM_ATOM3
@@ -1053,6 +1054,10 @@ void handleRemoteFlow(unsigned long now, bool doorLink) {
   }
 
   if (!remoteSuccess && remoteAttempts >= 2 && !openPending && !denyUntil) {
+    scheduleRemoteSleep();
+  }
+
+  if (!remoteSuccess && !doorLink && !sessionValid && (now - remoteStartMs > REMOTE_NO_LINK_SLEEP_MS)) {
     scheduleRemoteSleep();
   }
 
