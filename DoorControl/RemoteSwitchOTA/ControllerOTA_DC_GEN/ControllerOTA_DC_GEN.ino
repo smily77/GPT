@@ -39,6 +39,8 @@ enum class DisplayMode {
 
 #if PLATFORM_ATOM3
   #include <M5Unified.h>
+  #include "fog_light_bitmap.h"
+  #include "garage_door_bitmap.h"
 #elif PLATFORM_ORIGINAL
   #include <Wire.h>
   #include <Adafruit_GFX.h>
@@ -72,7 +74,7 @@ constexpr uint16_t rgb565(uint8_t r, uint8_t g, uint8_t b) {
   return ((r & 0xF8) << 8) | ((g & 0xFC) << 3) | (b >> 3);
 }
 
-const uint16_t COLOR_BG        = rgb565(10, 10, 10);
+const uint16_t COLOR_BG        = rgb565(0, 0, 0);
 const uint16_t COLOR_BLUE      = rgb565(0, 160, 255);
 const uint16_t COLOR_YELLOW    = rgb565(255, 210, 0);
 const uint16_t COLOR_BLACK     = rgb565(0, 0, 0);
@@ -161,6 +163,10 @@ constexpr unsigned long LONG_PRESS_MS = 2000;
 // ====== DISPLAY / INPUT (Atom S3) ======
 M5GFX &gfx = M5.Display;
 DisplayMode currentDisplay = DisplayMode::OTA;
+// Bitmap-Eigenschaften
+const int BITMAP_WIDTH = 96;
+const int BITMAP_HEIGHT = 96;
+const int BYTES_PER_ROW = 12;  // (96 + 7) / 8 = 12
 
 void drawCenteredText(const String &text, uint16_t fg, uint16_t bg) {
   gfx.fillScreen(bg);
@@ -170,43 +176,93 @@ void drawCenteredText(const String &text, uint16_t fg, uint16_t bg) {
   gfx.drawString(text, gfx.width() / 2, gfx.height() / 2);
 }
 
-void drawFogIcon(uint16_t bg, uint16_t fg) {
-  gfx.fillScreen(bg);
-  int cx = gfx.width() / 2;
-  int cy = gfx.height() / 2;
-  int radius = 36;
+/**
+ * Zeigt das Nebelschlussleuchtensymbol mit individuellen Farben
+ *
+ * @param sHue    Symbol Farbton (0-360°)
+ * @param sBright Symbol Helligkeit (0-100%)
+ * @param bHue    Hintergrund Farbton (0-360°)
+ * @param bBright Hintergrund Helligkeit (0-100%)
+ * @param bitmap  Zeiger auf das 1-Bit Bitmap-Array
+ */
+void displayFogLight(int sHue, int sBright, int bHue, int bBright, const unsigned char* bitmap) {
+  // Farben berechnen
+  uint16_t symbolColor = hsvToRgb565(sHue, 100, sBright);
+  uint16_t bgColor = hsvToRgb565(bHue, 100, bBright);
 
-  gfx.fillCircle(cx - 16, cy, radius, fg);
-  gfx.fillRect(cx - 16, cy - radius, radius * 2, radius * 2, bg);
-  gfx.fillRoundRect(cx - 10, cy - 18, 64, 36, 10, fg);
-  gfx.fillRect(cx + 22, cy - 24, 6, 48, fg);
-  gfx.fillRect(cx - 30, cy - 4, 80, 8, fg);
-  for (int i = -16; i <= 16; i += 16) {
-    gfx.drawLine(cx + 30, cy + i, cx + 52, cy + i, fg);
+  // Hintergrund mit gewählter Farbe füllen
+  M5.Display.fillScreen(bgColor);
+
+  // Bitmap zentriert auf dem 128x128 Display zeichnen
+  int offsetX = (128 - BITMAP_WIDTH) / 2;
+  int offsetY = (128 - BITMAP_HEIGHT) / 2;
+
+  // Jedes Pixel des Bitmaps durchgehen
+  for (int y = 0; y < BITMAP_HEIGHT; y++) {
+    for (int x = 0; x < BITMAP_WIDTH; x++) {
+      // Byte-Index und Bit-Position berechnen
+      int byteIndex = y * BYTES_PER_ROW + (x / 8);
+      int bitPosition = 7 - (x % 8);
+
+      // Bit auslesen (0 = Symbol zeichnen, 1 = Hintergrund)
+      bool isBackground = (bitmap[byteIndex] >> bitPosition) & 0x01;
+
+      if (!isBackground) {
+        // Symbol-Pixel zeichnen
+        M5.Display.drawPixel(offsetX + x, offsetY + y, symbolColor);
+      }
+      // Hintergrund wurde bereits durch fillScreen gesetzt
+    }
   }
 }
 
-void drawGarageRemoteIcon(uint16_t fg, uint16_t bg) {
-  gfx.fillScreen(bg);
-  int w = gfx.width();
-  int h = gfx.height();
-  gfx.fillRoundRect(w / 2 - 42, h / 2 - 36, 84, 72, 10, fg);
-  gfx.fillRoundRect(w / 2 - 34, h / 2 - 28, 68, 56, 8, bg);
-  gfx.fillRect(w / 2 - 28, h / 2 - 8, 56, 12, fg);
-  int cx = w / 2 + 26;
-  int cy = h / 2 - 26;
-  gfx.drawCircle(cx, cy, 12, fg);
-  gfx.drawCircle(cx, cy, 18, fg);
-  gfx.fillCircle(cx, cy, 6, fg);
+// HSV zu RGB565 Konvertierung
+// h: Hue (0-360°), s: Saturation (0-100%), v: Value/Brightness (0-100%)
+uint16_t hsvToRgb565(int h, int s, int v) {
+  float H = h;
+  float S = s / 100.0;
+  float V = v / 100.0;
+
+  float C = V * S;
+  float X = C * (1 - abs(fmod(H / 60.0, 2) - 1));
+  float m = V - C;
+
+  float r, g, b;
+
+  if (H >= 0 && H < 60) {
+    r = C; g = X; b = 0;
+  } else if (H >= 60 && H < 120) {
+    r = X; g = C; b = 0;
+  } else if (H >= 120 && H < 180) {
+    r = 0; g = C; b = X;
+  } else if (H >= 180 && H < 240) {
+    r = 0; g = X; b = C;
+  } else if (H >= 240 && H < 300) {
+    r = X; g = 0; b = C;
+  } else {
+    r = C; g = 0; b = X;
+  }
+
+  // Zu 0-255 konvertieren
+  uint8_t R = (r + m) * 255;
+  uint8_t G = (g + m) * 255;
+  uint8_t B = (b + m) * 255;
+
+  // Zu RGB565 konvertieren
+  uint16_t r5 = (R >> 3) & 0x1F;
+  uint16_t g6 = (G >> 2) & 0x3F;
+  uint16_t b5 = (B >> 3) & 0x1F;
+
+  return (r5 << 11) | (g6 << 5) | b5;
 }
 
 void setDisplay(DisplayMode mode) {
   if (mode == currentDisplay) return;
   currentDisplay = mode;
   switch (mode) {
-    case DisplayMode::FogReady:   drawFogIcon(COLOR_BG, COLOR_BLUE); break;
-    case DisplayMode::FogOn:      drawFogIcon(COLOR_YELLOW, COLOR_BLACK); break;
-    case DisplayMode::Garage:     drawGarageRemoteIcon(COLOR_WHITE, COLOR_BG); break;
+    case DisplayMode::FogReady:   displayFogLight(220, 58, 0, 0, fog_light_icon_96x96); break;
+    case DisplayMode::FogOn:      displayFogLight(32, 90, 0, 0, fog_light_icon_96x96); break;
+    case DisplayMode::Garage:     displayFogLight(0, 100, 0, 0, garage_door_icon_96x96); break;
     case DisplayMode::GarageDeny: drawCenteredText("DENY", COLOR_WHITE, COLOR_RED); break;
     case DisplayMode::NoLink:     drawCenteredText("No Link", COLOR_WHITE, COLOR_BG); break;
     case DisplayMode::NoPower:    drawCenteredText("No Power", COLOR_WHITE, COLOR_BG); break;
