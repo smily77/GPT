@@ -27,6 +27,12 @@ Zusätzlich gibt es die DoorControl-Edition **ControllerOTA_DC**/**ActorOTA_DC**
   (ESP32-C3 mit zweifarbigen LEDs + NeoPixel) oder `#define Remote`
   (ESP32-C3 Door-Only Remote, Deep-Sleep nach Aktion) in `doorLockData.h` wird zur
   gewünschten Plattform kompiliert, die restliche Logik bleibt identisch.
+- **ControllerOTA_DC_GEN_II** erweitert `ControllerOTA_DC_GEN` um die neue
+  Plattform **Remote**: ein minimalistischer Garagentor-Öffner ohne Actor-Steuerung.
+  Nach dem Aufwachen versucht er automatisch, das Garagentor zu toggeln, führt bei
+  Bedarf genau einen zweiten Versuch aus und geht anschließend in den Deep-Sleep.
+  Bei Erfolg leuchtet die Status-LED an GPIO 8 für 100ms. Die Plattform wird wie
+  gewohnt über `#define Remote` in `doorLockData.h` ausgewählt.
 - **ActorOTA_DC** ist der zum ControllerOTA_DC passende Aktor. Beide nutzen die
   MAC-Adressen aus `doorLockData.h` (Sender 1 für den Controller, `ACTOR_MAC`
   für den Aktor) und den dort konfigurierten WiFi-Kanal.
@@ -580,3 +586,17 @@ Anpassungen für andere ESP32-Varianten erfordern Pin-Änderungen.
 **Version**: RemoteSwitchOTA v1.1
 **Letzte Änderung**: 2025-12-20
 **Autor**: AI-generiert für smily77/AI_Test
+
+## Neue Plattform: Remote (ControllerOTA_DC_GEN_II)
+
+- **Sketch**: `RemoteSwitchOTA/ControllerOTA_DC_GEN_II/ControllerOTA_DC_GEN_II.ino`
+- **Zweck**: Minimalistische Garagen-Fernbedienung ohne Actor-Steuerung.
+- **Ablauf nach Reset/Wakeup**:
+  1. ESP-NOW Handshake wie beim DoorSender.
+  2. Automatisch einen OPEN-Befehl an den DoorReceiver senden; bei Fehlschlag genau
+     einen zweiten Versuch starten.
+  3. Bei erfolgreicher Türaktion leuchtet die Status-LED an **GPIO 8** für **100 ms**.
+  4. Anschließend immer in den **Deep-Sleep** gehen (auch nach zwei Fehlversuchen).
+- **Konfiguration**: In `doorLockData.h` `#define Remote` setzen und wie gewohnt
+  `WIFI_CHANNEL`, `RECEIVER_MAC`, `SENDER_SECRETS` sowie `CONTROLLER_SENDER_ID`
+  ausfüllen.
