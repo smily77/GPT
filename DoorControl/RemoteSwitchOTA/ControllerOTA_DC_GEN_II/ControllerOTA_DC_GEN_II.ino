@@ -169,6 +169,7 @@ constexpr unsigned long LONG_PRESS_MS = 2000;
 #if PLATFORM_REMOTE
 constexpr uint8_t PIN_SUCCESS_LED = 8;
 constexpr unsigned long SUCCESS_LED_MS = 100;
+constexpr uint8_t PIN_POWER_HOLD = 10;
 bool remoteSuccess = false;
 uint8_t remoteAttempts = 0;
 bool remoteSleepScheduled = false;
@@ -844,6 +845,10 @@ void sendOtaRequest() {
 #endif
 
 void setup() {
+#if PLATFORM_REMOTE
+  pinMode(PIN_POWER_HOLD, OUTPUT);
+  digitalWrite(PIN_POWER_HOLD, HIGH); // ensure power hold asserted first
+#endif
 #if defined(Atom3)
   auto cfg = M5.config();
   M5.begin(cfg);
@@ -1066,6 +1071,7 @@ void handleRemoteFlow(unsigned long now, bool doorLink) {
   }
 
   if (remoteSleepScheduled && !openPending && !successLedOn && (!denyUntil || now > denyUntilMs)) {
+    digitalWrite(PIN_POWER_HOLD, LOW);
     esp_deep_sleep_start();
   }
 }
