@@ -36,6 +36,9 @@ Zusätzlich gibt es die DoorControl-Edition **ControllerOTA_DC**/**ActorOTA_DC**
 - **ActorOTA_DC** ist der zum ControllerOTA_DC passende Aktor. Beide nutzen die
   MAC-Adressen aus `doorLockData.h` (Sender 1 für den Controller, `ACTOR_MAC`
   für den Aktor) und den dort konfigurierten WiFi-Kanal.
+- **ActorOTA_DC_LIGHT** ist eine stromsparende Variante ohne Spannungssense
+  an PIN 4; das Relais-LED-Signal an PIN 8 ist invertiert (LOW = EIN). Sonst
+  bleibt das OTA/ESP-NOW-Verhalten identisch zu ActorOTA_DC.
 
 Die Kommunikation erfolgt primär über **ESP-NOW** (WiFi-unabhängiges Protokoll). Für OTA-Updates können beide Geräte temporär in den **WiFi-Modus** wechseln und danach automatisch zu ESP-NOW zurückkehren.
 
