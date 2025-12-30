@@ -380,8 +380,8 @@ void showWifiFail() { setDisplay(DisplayMode::WiFiFail); }
 // ====== DISPLAY / INPUT (Switch_Light: GPIO LEDs + single pixel) ======
 constexpr uint8_t PIN_BLUE = 6;
 constexpr uint8_t PIN_YELLOW = 5;
-constexpr uint8_t PIN_BUTTON = 7; // active LOW
-constexpr uint8_t PIN_BUTTON_ALT = 9; // active LOW (test harness)
+constexpr uint8_t PIN_BUTTON = 7;      // active HIGH, pulldown
+constexpr uint8_t PIN_BUTTON_ALT = 9;  // active LOW, pullup (test harness)
 constexpr uint8_t PIN_PIXEL = 8;
 
 constexpr uint16_t BLINK_FAST_MS = 150;
@@ -821,7 +821,7 @@ void setup() {
   pinMode(PIN_BLUE, OUTPUT);
   pinMode(PIN_YELLOW, OUTPUT);
   pinMode(PIN_BUTTON, INPUT_PULLDOWN);
-  pinMode(PIN_BUTTON_ALT, INPUT_PULLDOWN);
+  pinMode(PIN_BUTTON_ALT, INPUT_PULLUP);
   digitalWrite(PIN_BLUE, LOW);
   digitalWrite(PIN_YELLOW, LOW);
   indicator.begin();
@@ -925,7 +925,9 @@ void handleButton(bool doorLink, bool denyActive) {
 void handleButton(bool doorLink, bool denyActive) {
   int readingMain = digitalRead(PIN_BUTTON);
   int readingAlt = digitalRead(PIN_BUTTON_ALT);
-  int reading = (readingMain == HIGH || readingAlt == HIGH) ? HIGH : LOW;
+  bool pressedMain = (readingMain == HIGH);   // active HIGH
+  bool pressedAlt = (readingAlt == LOW);      // active LOW
+  int reading = (pressedMain || pressedAlt) ? HIGH : LOW;
   if (reading != lastReadingSwitch) {
     lastDebounceSwitch = millis();
   }
@@ -1052,7 +1054,7 @@ void loop() {
 #elif PLATFORM_ORIGINAL
       digitalRead(PIN_BUTTON) == LOW;
 #elif PLATFORM_SWITCH_LIGHT
-      (digitalRead(PIN_BUTTON) == HIGH) || (digitalRead(PIN_BUTTON_ALT) == HIGH);
+      (digitalRead(PIN_BUTTON) == HIGH) || (digitalRead(PIN_BUTTON_ALT) == LOW);
 #endif
 
     if (!linkOk) {
