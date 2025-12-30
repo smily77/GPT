@@ -392,8 +392,8 @@ DisplayMode currentDisplay = DisplayMode::OTA;
 
 bool lastBlueState = false;
 bool lastYellowState = false;
-bool lastReadingSwitch = HIGH;
-bool buttonStateSwitch = HIGH;
+bool lastReadingSwitch = LOW;
+bool buttonStateSwitch = LOW;
 unsigned long lastDebounceSwitch = 0;
 constexpr unsigned long DEBOUNCE_SWITCH_MS = 40;
 constexpr uint8_t PIXEL_BRIGHTNESS_PCT = 30; // 30% brightness
@@ -820,8 +820,8 @@ void setup() {
   delay(500);
   pinMode(PIN_BLUE, OUTPUT);
   pinMode(PIN_YELLOW, OUTPUT);
-  pinMode(PIN_BUTTON, INPUT_PULLUP);
-  pinMode(PIN_BUTTON_ALT, INPUT_PULLUP);
+  pinMode(PIN_BUTTON, INPUT_PULLDOWN);
+  pinMode(PIN_BUTTON_ALT, INPUT_PULLDOWN);
   digitalWrite(PIN_BLUE, LOW);
   digitalWrite(PIN_YELLOW, LOW);
   indicator.begin();
@@ -925,7 +925,7 @@ void handleButton(bool doorLink, bool denyActive) {
 void handleButton(bool doorLink, bool denyActive) {
   int readingMain = digitalRead(PIN_BUTTON);
   int readingAlt = digitalRead(PIN_BUTTON_ALT);
-  int reading = (readingMain == LOW || readingAlt == LOW) ? LOW : HIGH;
+  int reading = (readingMain == HIGH || readingAlt == HIGH) ? HIGH : LOW;
   if (reading != lastReadingSwitch) {
     lastDebounceSwitch = millis();
   }
@@ -933,7 +933,7 @@ void handleButton(bool doorLink, bool denyActive) {
   if ((millis() - lastDebounceSwitch) > DEBOUNCE_SWITCH_MS) {
     if (reading != buttonStateSwitch) {
       buttonStateSwitch = reading;
-      if (buttonStateSwitch == LOW) {
+      if (buttonStateSwitch == HIGH) {
         buttonPressStartTime = millis();
         buttonLongPressHandled = false;
       } else {
@@ -950,7 +950,7 @@ void handleButton(bool doorLink, bool denyActive) {
     }
   }
 
-  if (buttonStateSwitch == LOW && !buttonLongPressHandled && !otaMode) {
+  if (buttonStateSwitch == HIGH && !buttonLongPressHandled && !otaMode) {
     unsigned long pressDuration = millis() - buttonPressStartTime;
     if (pressDuration >= LONG_PRESS_MS) {
       buttonLongPressHandled = true;
@@ -1052,7 +1052,7 @@ void loop() {
 #elif PLATFORM_ORIGINAL
       digitalRead(PIN_BUTTON) == LOW;
 #elif PLATFORM_SWITCH_LIGHT
-      digitalRead(PIN_BUTTON) == LOW;
+      (digitalRead(PIN_BUTTON) == HIGH) || (digitalRead(PIN_BUTTON_ALT) == HIGH);
 #endif
 
     if (!linkOk) {
