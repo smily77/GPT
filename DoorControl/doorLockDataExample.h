@@ -6,10 +6,11 @@
 // and replace MAC addresses and keys with your own values. Keep doorLockData.h
 // out of version control.
 
-// Platform selection for ControllerOTA_DC_GEN (exactly one define):
+// Platform selection for ControllerOTA_DC_GEN / ControllerOTA_DC_GEN_II (exactly one define):
 // #define Atom3         // M5Stack Atom S3 + M5Unified
 // #define Original      // ESP32-C3 + SSD1306 + GPIO button/LED
 // #define Switch_Light  // ESP32-C3 + dual GPIO LEDs + NeoPixel status
+// #define Remote        // ESP32-C3 minimalist Garage-Only Remote (success LED on GPIO 8)
 
 #define WIFI_CHANNEL 6
 

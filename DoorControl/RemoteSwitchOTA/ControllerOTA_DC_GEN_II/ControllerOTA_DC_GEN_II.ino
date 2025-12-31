@@ -25,6 +25,7 @@ enum class DisplayMode {
 #include <ArduinoOTA.h>
 #include <Credentials.h>
 #include <mbedtls/md.h>
+#include <esp_sleep.h>
 #include <doorLockData.h>
 
 #if defined(Atom3)
@@ -33,8 +34,10 @@ enum class DisplayMode {
   #define PLATFORM_ORIGINAL 1
 #elif defined(Switch_Light)
   #define PLATFORM_SWITCH_LIGHT 1
+#elif defined(Remote)
+  #define PLATFORM_REMOTE 1
 #else
-  #error "Define Atom3, Original, or Switch_Light in doorLockData.h for ControllerOTA_DC_GEN"
+  #error "Define Atom3, Original, Switch_Light, or Remote in doorLockData.h for ControllerOTA_DC_GEN_II"
 #endif
 
 #if PLATFORM_ATOM3
@@ -48,6 +51,8 @@ enum class DisplayMode {
   #include <Fonts/FreeSansBold12pt7b.h>
 #elif PLATFORM_SWITCH_LIGHT
   #include <Adafruit_NeoPixel.h>
+#elif PLATFORM_REMOTE
+  // Minimal hardware (GPIO LED only)
 #endif
 
 #define DEBUG false
@@ -84,8 +89,10 @@ const uint16_t COLOR_RED       = rgb565(220, 40, 40);
 // ====== ESP-NOW ======
 constexpr uint8_t SENDER_ID = CONTROLLER_SENDER_ID;
 uint8_t controllerMac[6] = {0};
+#if !PLATFORM_REMOTE
 uint8_t actorPeerMac[6] = {0};
 bool actorMacKnown = false;
+#endif
 
 constexpr uint8_t MSG_STATUS = 1;
 constexpr uint8_t MSG_COMMAND = 2;
@@ -158,6 +165,20 @@ constexpr unsigned long HELLO_INTERVAL_MS = 300;
 unsigned long buttonPressStartTime = 0;
 bool buttonLongPressHandled = false;
 constexpr unsigned long LONG_PRESS_MS = 2000;
+
+#if PLATFORM_REMOTE
+constexpr uint8_t PIN_SUCCESS_LED = 8;
+constexpr unsigned long SUCCESS_LED_MS = 100;
+constexpr uint8_t PIN_POWER_HOLD = 10;
+bool remoteSuccess = false;
+uint8_t remoteAttempts = 0;
+bool remoteSleepScheduled = false;
+bool successLedOn = false;
+unsigned long successLedStartMs = 0;
+unsigned long remoteStartMs = 0;
+constexpr unsigned long REMOTE_MAX_OPERATION_MS = SESSION_TTL_MS + IN_RANGE_TIMEOUT_MS;
+constexpr unsigned long REMOTE_NO_LINK_SLEEP_MS = HELLO_INTERVAL_MS * 2;
+#endif
 
 #if PLATFORM_ATOM3
 // ====== DISPLAY / INPUT (Atom S3) ======
@@ -487,6 +508,22 @@ void showOtaError() { setDisplay(DisplayMode::OTAError); }
 void showUpdating() { setDisplay(DisplayMode::Updating); }
 void showDone() { setDisplay(DisplayMode::Done); }
 void showWifiFail() { setDisplay(DisplayMode::WiFiFail); }
+#elif PLATFORM_REMOTE
+DisplayMode currentDisplay = DisplayMode::None;
+
+void setDisplay(DisplayMode mode) { currentDisplay = mode; }
+void showReady() {}
+void showOn() {}
+void showGarage(bool) {}
+void showNoLink() {}
+void showNoPower() {}
+void showOtaReq() {}
+void showGoOta() {}
+void showOta() {}
+void showOtaError() {}
+void showUpdating() {}
+void showDone() {}
+void showWifiFail() {}
 #endif
 
 bool constantTimeEqual(const uint8_t *a, const uint8_t *b, size_t len) {
@@ -569,8 +606,8 @@ void sendHello() {
   esp_now_send(RECEIVER_MAC, reinterpret_cast<uint8_t *>(&msg), sizeof(msg));
 }
 
-void sendOpen() {
-  if (!sessionValid) return;
+bool sendOpen() {
+  if (!sessionValid) return false;
   if (!esp_now_is_peer_exist(RECEIVER_MAC)) {
     esp_now_peer_info_t peer = {};
     memcpy(peer.peer_addr, RECEIVER_MAC, 6);
@@ -590,6 +627,7 @@ void sendOpen() {
     openPending = true;
     openSentMs = millis();
   }
+  return res == ESP_OK;
 }
 
 void handleChallenge(const DoorMessage &msg) {
@@ -610,6 +648,9 @@ void handleAck(const DoorMessage &msg) {
   if (!constantTimeEqual(expected, msg.tag, 16)) return;
   denyUntil = false;
   openPending = false;
+#if PLATFORM_REMOTE
+  remoteSuccess = true;
+#endif
 }
 
 void handleDeny(const DoorMessage &msg) {
@@ -640,6 +681,7 @@ void onReceive(const esp_now_recv_info_t *info, const uint8_t *data, int len) {
     return;
   }
 
+#if !PLATFORM_REMOTE
   if (len < 1) return;
   uint8_t msgType = data[0];
 
@@ -678,6 +720,7 @@ void onReceive(const esp_now_recv_info_t *info, const uint8_t *data, int len) {
     if (DEBUG) Serial << "OTA ACK received from Actor" << endl;
     otaAckReceived = true;
   }
+#endif
 }
 
 void setupEspNow() {
@@ -698,6 +741,7 @@ void setupEspNow() {
   rxPeer.encrypt = false;
   esp_now_add_peer(&rxPeer);
 
+#if !PLATFORM_REMOTE
   if (actorMacKnown) {
     esp_now_peer_info_t peerInfo = {};
     memcpy(peerInfo.peer_addr, actorPeerMac, 6);
@@ -706,6 +750,7 @@ void setupEspNow() {
     peerInfo.encrypt = false;
     esp_now_add_peer(&peerInfo);
   }
+#endif
 
   esp_wifi_set_channel(WIFI_CHANNEL, WIFI_SECOND_CHAN_NONE);
 }
@@ -780,6 +825,10 @@ void setupOTA() {
   }
 }
 
+#if PLATFORM_REMOTE
+void sendCommand(bool) {}
+void sendOtaRequest() {}
+#else
 void sendCommand(bool state) {
   if (!actorMacKnown) return;
   CommandMessage msg{MSG_COMMAND, state};
@@ -793,8 +842,13 @@ void sendOtaRequest() {
   OtaMessage msg{MSG_OTA_REQUEST};
   esp_now_send(actorPeerMac, reinterpret_cast<uint8_t *>(&msg), sizeof(msg));
 }
+#endif
 
 void setup() {
+#if PLATFORM_REMOTE
+  pinMode(PIN_POWER_HOLD, OUTPUT);
+  digitalWrite(PIN_POWER_HOLD, HIGH); // ensure power hold asserted first
+#endif
 #if defined(Atom3)
   auto cfg = M5.config();
   M5.begin(cfg);
@@ -827,6 +881,11 @@ void setup() {
   indicator.begin();
   indicator.clear();
   indicator.show();
+#elif PLATFORM_REMOTE
+  Serial.begin(115200);
+  delay(200);
+  pinMode(PIN_SUCCESS_LED, OUTPUT);
+  digitalWrite(PIN_SUCCESS_LED, LOW);
 #endif
 
 #if PLATFORM_ATOM3
@@ -842,10 +901,15 @@ void setup() {
   }
   memcpy(controllerMac, selfSecret->sender_mac, sizeof(controllerMac));
 
+#if !PLATFORM_REMOTE
   memcpy(actorPeerMac, ACTOR_MAC, sizeof(actorPeerMac));
   actorMacKnown = true;
+#endif
 
   setDisplay(DisplayMode::None);
+#if PLATFORM_REMOTE
+  remoteStartMs = millis();
+#endif
   setupEspNow();
 }
 
@@ -925,8 +989,8 @@ void handleButton(bool doorLink, bool denyActive) {
 void handleButton(bool doorLink, bool denyActive) {
   int readingMain = digitalRead(PIN_BUTTON);
   int readingAlt = digitalRead(PIN_BUTTON_ALT);
-  bool pressedMain = (readingMain == HIGH);   // active HIGH
-  bool pressedAlt = (readingAlt == LOW);      // active LOW
+  bool pressedMain = (readingMain == HIGH);  // active HIGH
+  bool pressedAlt = (readingAlt == LOW);     // active LOW
   int reading = (pressedMain || pressedAlt) ? HIGH : LOW;
   if (reading != lastReadingSwitch) {
     lastDebounceSwitch = millis();
@@ -965,6 +1029,53 @@ void handleButton(bool doorLink, bool denyActive) {
   }
 
   lastReadingSwitch = reading;
+}
+#elif PLATFORM_REMOTE
+void handleButton(bool, bool) {}
+#endif
+
+#if PLATFORM_REMOTE
+void scheduleRemoteSleep() {
+  if (!remoteSleepScheduled) {
+    remoteSleepScheduled = true;
+  }
+}
+
+void handleRemoteFlow(unsigned long now, bool doorLink) {
+  if (remoteSuccess && !successLedOn) {
+    digitalWrite(PIN_SUCCESS_LED, HIGH);
+    successLedOn = true;
+    successLedStartMs = now;
+  }
+
+  if (successLedOn && (now - successLedStartMs >= SUCCESS_LED_MS)) {
+    digitalWrite(PIN_SUCCESS_LED, LOW);
+    successLedOn = false;
+    scheduleRemoteSleep();
+  }
+
+  if (!remoteSuccess && remoteAttempts < 2 && doorLink && !openPending && !denyUntil) {
+    if (sendOpen()) {
+      remoteAttempts++;
+    }
+  }
+
+  if (!remoteSuccess && remoteAttempts >= 2 && !openPending && !denyUntil) {
+    scheduleRemoteSleep();
+  }
+
+  if (!remoteSuccess && !doorLink && !sessionValid && (now - remoteStartMs > REMOTE_NO_LINK_SLEEP_MS)) {
+    scheduleRemoteSleep();
+  }
+
+  if (!remoteSuccess && (now - remoteStartMs > REMOTE_MAX_OPERATION_MS)) {
+    scheduleRemoteSleep();
+  }
+
+  if (remoteSleepScheduled && !openPending && !successLedOn && (!denyUntil || now > denyUntilMs)) {
+    digitalWrite(PIN_POWER_HOLD, LOW);
+    esp_deep_sleep_start();
+  }
 }
 #endif
 
@@ -1017,6 +1128,11 @@ void loop() {
     return;
   }
 
+#if PLATFORM_REMOTE
+  handleRemoteFlow(now, doorLink);
+  return;
+#endif
+
   if (now - lastStatusMs > STATUS_TIMEOUT_MS) {
     if (missedStatusCount < 3) missedStatusCount++;
     if (missedStatusCount >= 2) {
@@ -1055,6 +1171,8 @@ void loop() {
       digitalRead(PIN_BUTTON) == LOW;
 #elif PLATFORM_SWITCH_LIGHT
       (digitalRead(PIN_BUTTON) == HIGH) || (digitalRead(PIN_BUTTON_ALT) == LOW);
+#elif PLATFORM_REMOTE
+      false;
 #endif
 
     if (!linkOk) {
