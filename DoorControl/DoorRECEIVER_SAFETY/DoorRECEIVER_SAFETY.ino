@@ -276,21 +276,20 @@ void handleOpen(const SenderSecret &sc, const uint8_t *mac, const Message &msg) 
 
   // Generate fresh permit nonce
   currentPermitNonce = (uint16_t)(esp_random() & 0xFFFF);
+  logDebug("=== DOOR OPEN - Starting permit sequence ===");
 
   // SAFETY PERMIT PROTOCOL:
   // 1) Send PERMIT1 to slave (if configured)
   sendPermit(PERMIT_MSG_PERMIT1, currentPermitNonce);
 
-
   // 2) Pulse local relay
   relayPulse = true;
   relayUntil = millis() + RELAY_PULSE_MS;
   setStatusColor(colorBlue());
-
+  logDebug("Local relay activated");
 
   // 3) Send PERMIT2 to slave (if configured)
   sendPermit(PERMIT_MSG_PERMIT2, currentPermitNonce);
-
 
   // 4) Optional late backup sends
   delay(10);
@@ -379,11 +378,13 @@ void setup() {
   safetySlaveConfigured = true;
   ensurePeer(DOORSAFETY_SLAVE_MAC);
   logDebug("Safety slave configured");
+  logPeer("Slave MAC: ", DOORSAFETY_SLAVE_MAC);
 #else
   safetySlaveConfigured = false;
   logDebug("Safety slave NOT configured - operating standalone");
 #endif
 
+  logDebug("DoorRECEIVER_SAFETY ready");
 }
 
 void loop() {

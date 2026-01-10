@@ -42,6 +42,8 @@ uint32_t permit1Timestamp = 0;
 uint32_t doneTimestamp = 0;
 bool relayPulse = false;
 uint32_t relayUntil = 0;
+uint32_t lastHeartbeat = 0;
+uint32_t packetCount = 0;
 
 void logDebug(const char *fmt, ...) {
 #if DEBUG
@@ -123,18 +125,23 @@ void handlePermit2(uint16_t nonce) {
 void onDataRecv(const esp_now_recv_info *info, const uint8_t *incomingData, int len) {
   if (!info) return;
 
+  packetCount++;
+  logDebug("Packet #%u received, len=%d", packetCount, len);
+
 #ifdef DOORSAFETY_MASTER_MAC
   // Verify sender is the configured master
   if (memcmp(info->src_addr, DOORSAFETY_MASTER_MAC, 6) != 0) {
-    logDebug("Permit from unknown MAC, ignoring");
-      return;
+    logPeer("Permit from unknown MAC: ", info->src_addr);
+    logDebug("Expected master MAC differs, ignoring");
+    return;
   }
 #else
 #error "DOORSAFETY_MASTER_MAC must be defined in doorLockData.h for DoorSLAVE_SAFETY"
 #endif
 
   if (len != (int)sizeof(PermitMessage)) {
-      return;
+    logDebug("Wrong packet size (expected %d, got %d)", sizeof(PermitMessage), len);
+    return;
   }
 
   PermitMessage pm;
@@ -202,11 +209,17 @@ void setup() {
 #endif
 
   logDebug("DoorSLAVE_SAFETY ready");
+  logDebug("Listening on channel %d", WIFI_CHANNEL);
 }
 
 void loop() {
-
   uint32_t now = millis();
+
+  // Heartbeat every 10 seconds
+  if (now - lastHeartbeat > 10000) {
+    logDebug("Alive | State: %d | Packets: %u", currentState, packetCount);
+    lastHeartbeat = now;
+  }
 
   // Handle relay pulse
   if (relayPulse && now > relayUntil) {
