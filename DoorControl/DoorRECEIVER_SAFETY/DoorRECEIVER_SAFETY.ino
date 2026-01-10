@@ -400,6 +400,7 @@ void setup() {
     logDebug("ESP-NOW init failed");
     while (true) delay(1000);
   }
+  logDebug("ESP-NOW init OK on channel %u", WIFI_CHANNEL);
   esp_now_register_recv_cb(onDataRecv);
   esp_now_register_send_cb(onDataSent);
 
@@ -409,6 +410,8 @@ void setup() {
 
 #ifdef DOORSAFETY_SLAVE_MAC
   ensurePeer(SAFETY_SLAVE_MAC);
+  logPeer("Safety slave MAC ", SAFETY_SLAVE_MAC);
+  logDebug("Safety permits enabled");
 #endif
 }
 

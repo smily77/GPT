@@ -159,11 +159,14 @@ void setup() {
 
   WiFi.mode(WIFI_STA);
   esp_wifi_set_channel(WIFI_CHANNEL, WIFI_SECOND_CHAN_NONE);
+  logDebug("Safety slave boot, channel %u", WIFI_CHANNEL);
+  logPeer("Safety master MAC ", SAFETY_MASTER_MAC);
 
   if (esp_now_init() != ESP_OK) {
     logDebug("ESP-NOW init failed");
     while (true) delay(1000);
   }
+  logDebug("ESP-NOW init OK");
   ensurePeer(SAFETY_MASTER_MAC);
   esp_now_register_recv_cb(onDataRecv);
   esp_now_register_send_cb(onDataSent);
