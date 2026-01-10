@@ -7,10 +7,12 @@
 #include <WiFi.h>
 #include <esp_wifi.h>
 #include <esp_now.h>
+#include <Adafruit_NeoPixel.h>
 #include <doorLockData.h>
 
 // === CONFIGURABLE PARAMETERS ===
 #define RELAY_PIN 2
+#define STATUS_PIXEL_PIN 8
 #define PERMIT_WINDOW_MS 200          // Maximum time between PERMIT1 and PERMIT2
 #define RELAY_PULSE_MS 500             // Relay pulse duration (slightly longer than master)
 #define COOLDOWN_MS 1000               // Time to stay in DONE state before returning to IDLE
@@ -45,6 +47,16 @@ uint32_t relayUntil = 0;
 uint32_t lastHeartbeat = 0;
 uint32_t packetCount = 0;
 
+Adafruit_NeoPixel statusPixel(1, STATUS_PIXEL_PIN, NEO_GRB + NEO_KHZ800);
+
+void setStatusColor(uint32_t color) {
+  statusPixel.setPixelColor(0, color);
+  statusPixel.show();
+}
+
+uint32_t colorOff() { return statusPixel.Color(0, 0, 0); }
+uint32_t colorBlue() { return statusPixel.Color(0, 0, 255); }
+
 void logDebug(const char *fmt, ...) {
 #if DEBUG
   char buf[128];
@@ -71,6 +83,7 @@ void pulseRelay() {
   relayPulse = true;
   relayUntil = millis() + RELAY_PULSE_MS;
   digitalWrite(RELAY_PIN, HIGH);
+  setStatusColor(colorBlue());
 }
 
 void handlePermit1(uint16_t nonce) {
@@ -180,6 +193,10 @@ void setup() {
   pinMode(RELAY_PIN, OUTPUT);
   digitalWrite(RELAY_PIN, LOW);
 
+  statusPixel.begin();
+  statusPixel.clear();
+  statusPixel.show();
+
   // Initialize WiFi first (required for esp_wifi_set_mac)
   WiFi.mode(WIFI_STA);
 
@@ -254,7 +271,15 @@ void loop() {
   if (relayPulse && now > relayUntil) {
     digitalWrite(RELAY_PIN, LOW);
     relayPulse = false;
+    setStatusColor(colorOff());
     logDebug("Relay OFF");
+  }
+
+  // Keep status LED in sync with relay
+  if (relayPulse) {
+    setStatusColor(colorBlue());
+  } else {
+    setStatusColor(colorOff());
   }
 
   // Handle state machine timeouts
