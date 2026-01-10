@@ -168,7 +168,7 @@ constexpr unsigned long LONG_PRESS_MS = 2000;
 
 #if PLATFORM_REMOTE
 constexpr uint8_t PIN_SUCCESS_LED = 8;
-constexpr unsigned long SUCCESS_LED_MS = 100;
+constexpr unsigned long SUCCESS_LED_MS = 1;
 constexpr uint8_t PIN_POWER_HOLD = 10;
 bool remoteSuccess = false;
 uint8_t remoteAttempts = 0;
