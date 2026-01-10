@@ -290,6 +290,12 @@ Supported platforms include:
 
 \* Minimal "Remote" variant (deep-sleep, one-shot operation)
 
+  \* GPIO 10 (PIN\_POWER\_HOLD) controls MH-CD42 via FET
+
+  \* Power-off sequence: 100ms HIGH → 500ms LOW → 100ms HIGH → LOW → Deep Sleep
+
+  \* Starts with PIN\_POWER\_HOLD LOW (MH-CD42 off)
+
 
 
 This controller supersedes all earlier DC controller variants.
@@ -424,11 +430,23 @@ This file defines:
 
 \* WiFi channel
 
-\* MAC addresses (receiver, actor, controllers)
+\* MAC addresses:
 
-\* Shared secrets for door security
+  \* `RECEIVER_MAC` – Standard door receiver (static const array)
 
-\* Platform selection defines
+  \* `RECEIVER_SAFETY_MAC` – Safety-enhanced receiver (#define, optional)
+
+  \* `SLAVE_SAFETY_MAC` – Safety slave box (#define, optional)
+
+  \* `ACTOR_MAC` – Actor relay boxes
+
+\* Shared secrets for door security (HMAC-SHA256 keys)
+
+\* Platform selection defines (Atom3, Original, Switch\_Light, Remote)
+
+
+
+\*\*MAC-Setting Prinzip:\*\* Alle Receiver setzen ihre MAC aus doorLockData.h mit `esp_wifi_set_mac()` für Hardware-Austauschbarkeit.
 
 
 

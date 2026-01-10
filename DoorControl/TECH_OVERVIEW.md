@@ -81,7 +81,7 @@ Die Safety Extension ist eine **OPTIONALE** Hardware-Sicherheitsschicht, die das
 ### Permit-Protokoll-Ablauf
 1. **Normale Authentifizierung**: Sender → Receiver (Challenge-Response wie bisher)
 2. **PERMIT1**: Nach erfolgreicher Authentifizierung generiert DoorRECEIVER_SAFETY eine frische 16-Bit-Nonce und sendet PERMIT1(nonce) an DoorSLAVE_SAFETY (3× zur Robustheit)
-3. **Relais-Puls (Master)**: DoorRECEIVER_SAFETY aktiviert sein lokales Relais (~350 ms)
+3. **Relais-Puls (Master)**: DoorRECEIVER_SAFETY aktiviert sein lokales Relais (500 ms)
 4. **PERMIT2**: DoorRECEIVER_SAFETY sendet PERMIT2(nonce) an DoorSLAVE_SAFETY (3×)
 5. **Optional**: Backup-Sendungen von PERMIT1 und PERMIT2 nach kurzer Verzögerung
 
@@ -102,18 +102,39 @@ Die Safety Extension ist eine **OPTIONALE** Hardware-Sicherheitsschicht, die das
 - Zeitdifferenz zwischen PERMIT1 und PERMIT2 muss ≤ PERMIT_WINDOW_MS sein (Standard: 200 ms)
 - Alle weiteren Permits werden während `DONE` ignoriert
 
-### Watchdog (Liveness-Schutz)
-Beide Programme (DoorRECEIVER_SAFETY und DoorSLAVE_SAFETY) implementieren den ESP32 Task Watchdog:
-- Timeout: 10 Sekunden
-- Watchdog wird gefüttert in: Hauptschleife, ESP-NOW RX/TX, vor/nach Relais-Puls
-- Bei Watchdog-Reset: Relais defaultet auf OFF, kein Permit-Versand während Boot
-- Watchdog ist ein **Liveness**-Mechanismus, **KEIN** Sicherheitsmechanismus
+### MAC-Adressen (Hardware-Austauschbarkeit)
+Alle Receiver-Programme setzen ihre MAC-Adresse aus doorLockData.h, um Hardware-Austauschbarkeit zu ermöglichen:
+
+**DoorRECEIVER:**
+- Setzt `RECEIVER_MAC` (static const uint8_t array)
+- Ermöglicht Austausch ohne Neuflashen der Controller
+
+**DoorRECEIVER_SAFETY:**
+- Setzt `RECEIVER_SAFETY_MAC` (#define)
+- Sender müssen diese MAC als Ziel kennen
+
+**DoorSLAVE_SAFETY:**
+- Setzt `SLAVE_SAFETY_MAC` (#define)
+- Empfängt nur von `RECEIVER_SAFETY_MAC`
+
+**Sequenz für alle:**
+1. `WiFi.mode(WIFI_STA)` - WiFi initialisieren
+2. `esp_wifi_stop()` - WiFi stoppen (muss initialisiert aber gestoppt sein)
+3. `esp_wifi_set_mac(WIFI_IF_STA, MAC)` - MAC setzen
+4. `esp_wifi_start()` - WiFi mit neuer MAC starten
 
 ### Optionalität (MANDATORY)
-- Wenn `DOORSAFETY_SLAVE_MAC` **nicht definiert** ist: DoorRECEIVER_SAFETY verhält sich exakt wie DoorRECEIVER
+- Wenn `SLAVE_SAFETY_MAC` **nicht definiert** ist: DoorRECEIVER_SAFETY verhält sich exakt wie DoorRECEIVER
 - Wenn Slave-MAC konfiguriert ist, aber Slave fehlt: Türöffnung funktioniert trotzdem (nur Master-Relais)
 - Slave ist NIEMALS erforderlich für normale Türöffnung
 - Bestehende Projekte bleiben voll kompatibel
+
+### Hardware
+- **WS2812 Status-LED**: Beide DoorRECEIVER_SAFETY und DoorSLAVE_SAFETY haben Status-LED auf GPIO 8
+  - BLAU: Relais aktiv
+  - AUS: Relais inaktiv (DoorSLAVE_SAFETY)
+  - GRÜN: Sender in Reichweite (DoorRECEIVER_SAFETY)
+- **Relais-Dauer**: DoorRECEIVER_SAFETY (500ms), DoorSLAVE_SAFETY (500ms) - synchron
 
 ### Sicherheitshinweise
 - **Safety ≠ Security**: Permit-Protokoll ist unverschlüsselt und bietet KEINEN Schutz gegen Angreifer

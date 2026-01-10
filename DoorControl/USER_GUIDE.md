@@ -143,10 +143,18 @@ Notiere die MACs:
    - DoorSLAVE_SAFETY akzeptiert Permits NUR von der konfigurierten Master-MAC
    - Serielle Logs zeigen "Permit from unknown MAC" bei Mismatch
 
-#### Watchdog-Resets
-- Watchdog-Resets sind normal bei MCU-Abstürzen (das ist der Zweck!)
-- Nach Watchdog-Reset: Beide Relais defaulten auf OFF (sicherer Zustand)
-- Wenn häufige Watchdog-Resets auftreten: Prüfe Stromversorgung und serielle Logs
+#### Hardware-Anforderungen
+- **ESP32**: Beide Geräte (Master und Slave) müssen ESP32 sein
+- **WS2812 LED**: Optional auf GPIO 8 für visuelles Feedback
+  - Master (DoorRECEIVER_SAFETY): BLAU bei Relais aktiv, GRÜN bei Sender in Reichweite
+  - Slave (DoorSLAVE_SAFETY): BLAU bei Relais aktiv, sonst AUS
+- **Relais**: Müssen in SERIE geschaltet sein
+- **Stromversorgung**: Stabile Versorgung für beide Geräte empfohlen
+
+#### Stromversorgung und Resets
+- Nach Power-Cycle: Beide Relais defaulten auf OFF (sicherer Zustand)
+- Bei häufigen Resets: Prüfe Stromversorgung und serielle Logs
+- Relais bleiben nur 500ms aktiv (automatische Deaktivierung)
 
 ### Sicherheitshinweise
 - **Safety ≠ Security:** Permit-Nachrichten sind unverschlüsselt und bieten KEINEN Schutz gegen Angreifer
