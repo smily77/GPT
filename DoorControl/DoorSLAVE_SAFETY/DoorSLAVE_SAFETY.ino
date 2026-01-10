@@ -158,12 +158,12 @@ void setup() {
 
   WiFi.mode(WIFI_STA);
   esp_wifi_set_channel(WIFI_CHANNEL, WIFI_SECOND_CHAN_NONE);
-  ensurePeer(SAFETY_MASTER_MAC);
 
   if (esp_now_init() != ESP_OK) {
     logDebug("ESP-NOW init failed");
     while (true) delay(1000);
   }
+  ensurePeer(SAFETY_MASTER_MAC);
   esp_now_register_recv_cb(onDataRecv);
   esp_now_register_send_cb(onDataSent);
 }
