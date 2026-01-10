@@ -293,7 +293,30 @@ void setup() {
   statusPixel.clear();
   statusPixel.show();
 
+  // Initialize WiFi first (required for esp_wifi_set_mac)
   WiFi.mode(WIFI_STA);
+
+#ifdef RECEIVER_MAC
+  // CRITICAL: Set MAC address from configuration
+  // This allows hardware replacement without reflashing all devices
+
+  // Stop WiFi (must be initialized but stopped to set MAC)
+  esp_wifi_stop();
+
+  // Now set the MAC address
+  esp_err_t result = esp_wifi_set_mac(WIFI_IF_STA, RECEIVER_MAC);
+  if (result == ESP_OK) {
+    logDebug("MAC set from doorLockData.h");
+  } else {
+    logDebug("MAC set FAILED, error=%d (0x%X)", result, result);
+  }
+
+  // Start WiFi again
+  esp_wifi_start();
+#else
+#error "RECEIVER_MAC must be defined in doorLockData.h for DoorRECEIVER"
+#endif
+
   esp_wifi_set_channel(WIFI_CHANNEL, WIFI_SECOND_CHAN_NONE);
   esp_wifi_get_mac(WIFI_IF_STA, selfMac);
   logPeer("Receiver MAC ", selfMac);
