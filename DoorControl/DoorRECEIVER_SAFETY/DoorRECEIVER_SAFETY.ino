@@ -204,7 +204,8 @@ void sendPermit(uint8_t permitType, uint16_t nonce) {
 
   // Send multiple times for robustness
   for (int i = 0; i < 3; i++) {
-    esp_now_send(DOORSAFETY_SLAVE_MAC, (const uint8_t *)&pm, sizeof(PermitMessage));
+    esp_err_t result = esp_now_send(DOORSAFETY_SLAVE_MAC, (const uint8_t *)&pm, sizeof(PermitMessage));
+    logDebug("  Permit send attempt %d, result=%d, size=%d", i+1, result, sizeof(PermitMessage));
     delayMicroseconds(500);
   }
 
@@ -302,12 +303,19 @@ void handleOpen(const SenderSecret &sc, const uint8_t *mac, const Message &msg) 
 
 void ensurePeer(const uint8_t *mac) {
   esp_now_peer_info_t peer = {};
-  if (esp_now_is_peer_exist(mac)) return;
+  if (esp_now_is_peer_exist(mac)) {
+    logDebug("Peer already exists");
+    return;
+  }
   memcpy(peer.peer_addr, mac, 6);
   peer.channel = WIFI_CHANNEL;
   peer.encrypt = false;
   esp_err_t res = esp_now_add_peer(&peer);
-  logDebug("Add peer res=%d", res);
+  if (res == ESP_OK) {
+    logDebug("Peer added successfully");
+  } else {
+    logDebug("Add peer FAILED, error=%d", res);
+  }
 }
 
 void onDataRecv(const esp_now_recv_info *info, const uint8_t *incomingData, int len) {
@@ -338,8 +346,11 @@ void onDataRecv(const esp_now_recv_info *info, const uint8_t *incomingData, int 
   }
 }
 
-void onDataSent(const uint8_t *, esp_now_send_status_t status) {
-  logDebug("Send status=%d", status);
+void onDataSent(const uint8_t *mac, esp_now_send_status_t status) {
+  if (status != ESP_NOW_SEND_SUCCESS) {
+    logPeer("Send FAILED to ", mac);
+    logDebug("Send status=%d (0=success, 1=fail)", status);
+  }
 }
 
 void setup() {
@@ -359,6 +370,7 @@ void setup() {
   esp_wifi_set_channel(WIFI_CHANNEL, WIFI_SECOND_CHAN_NONE);
   esp_wifi_get_mac(WIFI_IF_STA, selfMac);
   logPeer("Receiver MAC ", selfMac);
+  logDebug("WiFi Channel: %d", WIFI_CHANNEL);
 
   if (esp_now_init() != ESP_OK) {
     logDebug("ESP-NOW init failed");
@@ -376,15 +388,17 @@ void setup() {
   // Check if safety slave is configured
 #ifdef DOORSAFETY_SLAVE_MAC
   safetySlaveConfigured = true;
-  ensurePeer(DOORSAFETY_SLAVE_MAC);
-  logDebug("Safety slave configured");
+  logDebug("=== SAFETY SLAVE CONFIGURATION ===");
   logPeer("Slave MAC: ", DOORSAFETY_SLAVE_MAC);
+  logDebug("Slave channel: %d", WIFI_CHANNEL);
+  ensurePeer(DOORSAFETY_SLAVE_MAC);
+  logDebug("Safety slave configured and peer added");
 #else
   safetySlaveConfigured = false;
   logDebug("Safety slave NOT configured - operating standalone");
 #endif
 
-  logDebug("DoorRECEIVER_SAFETY ready");
+  logDebug("=== DoorRECEIVER_SAFETY ready ===");
 }
 
 void loop() {

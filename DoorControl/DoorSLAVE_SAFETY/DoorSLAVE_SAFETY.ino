@@ -186,6 +186,7 @@ void setup() {
   uint8_t selfMac[6];
   esp_wifi_get_mac(WIFI_IF_STA, selfMac);
   logPeer("Slave MAC ", selfMac);
+  logDebug("WiFi Channel: %d", WIFI_CHANNEL);
 
   if (esp_now_init() != ESP_OK) {
     logDebug("ESP-NOW init failed");
@@ -202,8 +203,13 @@ void setup() {
   memcpy(peer.peer_addr, DOORSAFETY_MASTER_MAC, 6);
   peer.channel = WIFI_CHANNEL;
   peer.encrypt = false;
-  esp_now_add_peer(&peer);
+  esp_err_t res = esp_now_add_peer(&peer);
   logPeer("Master MAC ", DOORSAFETY_MASTER_MAC);
+  if (res == ESP_OK) {
+    logDebug("Master peer added successfully");
+  } else {
+    logDebug("Master peer add FAILED, error=%d", res);
+  }
 #else
 #error "DOORSAFETY_MASTER_MAC must be defined in doorLockData.h for DoorSLAVE_SAFETY"
 #endif
