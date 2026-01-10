@@ -180,26 +180,30 @@ void setup() {
   pinMode(RELAY_PIN, OUTPUT);
   digitalWrite(RELAY_PIN, LOW);
 
+  // Initialize WiFi first (required for esp_wifi_set_mac)
+  WiFi.mode(WIFI_STA);
+
 #ifdef SLAVE_SAFETY_MAC
-  // CRITICAL: Set MAC address from configuration BEFORE WiFi.mode()
+  // CRITICAL: Set MAC address from configuration
   // This allows hardware replacement without reflashing all devices
 
-  // Stop WiFi if it's running, to ensure MAC can be set
-  WiFi.mode(WIFI_MODE_NULL);
-  delay(100);
+  // Stop WiFi (must be initialized but stopped to set MAC)
+  esp_wifi_stop();
 
   // Now set the MAC address
   esp_err_t result = esp_wifi_set_mac(WIFI_IF_STA, SLAVE_SAFETY_MAC);
   if (result == ESP_OK) {
     logDebug("MAC set from doorLockData.h");
   } else {
-    logDebug("MAC set FAILED, error=%d", result);
+    logDebug("MAC set FAILED, error=%d (0x%X)", result, result);
   }
+
+  // Start WiFi again
+  esp_wifi_start();
 #else
 #error "SLAVE_SAFETY_MAC must be defined in doorLockData.h for DoorSLAVE_SAFETY"
 #endif
 
-  WiFi.mode(WIFI_STA);
   esp_wifi_set_channel(WIFI_CHANNEL, WIFI_SECOND_CHAN_NONE);
 
   uint8_t selfMac[6];
