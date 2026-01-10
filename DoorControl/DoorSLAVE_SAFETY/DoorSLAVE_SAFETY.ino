@@ -7,7 +7,6 @@
 #include <WiFi.h>
 #include <esp_wifi.h>
 #include <esp_now.h>
-#include <esp_task_wdt.h>
 #include <doorLockData.h>
 
 // === CONFIGURABLE PARAMETERS ===
@@ -16,7 +15,6 @@
 #define RELAY_PULSE_MS 500             // Relay pulse duration (slightly longer than master)
 #define COOLDOWN_MS 1000               // Time to stay in DONE state before returning to IDLE
 #define DEBUG 1
-#define WATCHDOG_TIMEOUT_S 10
 // ================================
 
 // Safety permit message types
@@ -45,10 +43,6 @@ uint32_t doneTimestamp = 0;
 bool relayPulse = false;
 uint32_t relayUntil = 0;
 
-void feedWatchdog() {
-  esp_task_wdt_reset();
-}
-
 void logDebug(const char *fmt, ...) {
 #if DEBUG
   char buf[128];
@@ -71,20 +65,16 @@ void logPeer(const char *label, const uint8_t mac[6]) {
 }
 
 void pulseRelay() {
-  feedWatchdog();
   logDebug("RELAY ACTIVATED");
   relayPulse = true;
   relayUntil = millis() + RELAY_PULSE_MS;
   digitalWrite(RELAY_PIN, HIGH);
-  feedWatchdog();
 }
 
 void handlePermit1(uint16_t nonce) {
-  feedWatchdog();
   if (currentState != STATE_IDLE) {
     logDebug("PERMIT1 ignored (not in IDLE)");
-    feedWatchdog();
-    return;
+      return;
   }
 
   // Transition to GOT_PERMIT1
@@ -92,15 +82,12 @@ void handlePermit1(uint16_t nonce) {
   storedNonce = nonce;
   permit1Timestamp = millis();
   logDebug("PERMIT1 received, nonce=%u", nonce);
-  feedWatchdog();
 }
 
 void handlePermit2(uint16_t nonce) {
-  feedWatchdog();
   if (currentState != STATE_GOT_PERMIT1) {
     logDebug("PERMIT2 ignored (not in GOT_PERMIT1)");
-    feedWatchdog();
-    return;
+      return;
   }
 
   // Check nonce match
@@ -109,8 +96,7 @@ void handlePermit2(uint16_t nonce) {
     // Reset to IDLE
     currentState = STATE_IDLE;
     storedNonce = 0;
-    feedWatchdog();
-    return;
+      return;
   }
 
   // Check time window
@@ -121,8 +107,7 @@ void handlePermit2(uint16_t nonce) {
     // Reset to IDLE
     currentState = STATE_IDLE;
     storedNonce = 0;
-    feedWatchdog();
-    return;
+      return;
   }
 
   // Valid PERMIT2 received within window - activate relay
@@ -133,27 +118,23 @@ void handlePermit2(uint16_t nonce) {
   currentState = STATE_DONE;
   doneTimestamp = now;
   storedNonce = 0;
-  feedWatchdog();
 }
 
 void onDataRecv(const esp_now_recv_info *info, const uint8_t *incomingData, int len) {
-  feedWatchdog();
   if (!info) return;
 
 #ifdef DOORSAFETY_MASTER_MAC
   // Verify sender is the configured master
   if (memcmp(info->src_addr, DOORSAFETY_MASTER_MAC, 6) != 0) {
     logDebug("Permit from unknown MAC, ignoring");
-    feedWatchdog();
-    return;
+      return;
   }
 #else
 #error "DOORSAFETY_MASTER_MAC must be defined in doorLockData.h for DoorSLAVE_SAFETY"
 #endif
 
   if (len != (int)sizeof(PermitMessage)) {
-    feedWatchdog();
-    return;
+      return;
   }
 
   PermitMessage pm;
@@ -162,8 +143,7 @@ void onDataRecv(const esp_now_recv_info *info, const uint8_t *incomingData, int 
   // Verify magic
   if (pm.magic != PERMIT_MAGIC) {
     logDebug("Invalid permit magic");
-    feedWatchdog();
-    return;
+      return;
   }
 
   // Handle based on permit type
@@ -178,11 +158,9 @@ void onDataRecv(const esp_now_recv_info *info, const uint8_t *incomingData, int 
       logDebug("Unknown permit type=%u", pm.type);
       break;
   }
-  feedWatchdog();
 }
 
 void onDataSent(const uint8_t *, esp_now_send_status_t status) {
-  feedWatchdog();
   // Slave doesn't send messages, but callback must be registered
 }
 
@@ -202,22 +180,10 @@ void setup() {
   esp_wifi_get_mac(WIFI_IF_STA, selfMac);
   logPeer("Slave MAC ", selfMac);
 
-  // Initialize watchdog (LIVENESS safeguard)
-  esp_task_wdt_config_t wdt_config = {
-    .timeout_ms = WATCHDOG_TIMEOUT_S * 1000,
-    .idle_core_mask = 0,
-    .trigger_panic = true
-  };
-  esp_task_wdt_init(&wdt_config);
-  esp_task_wdt_add(NULL);  // Add current task
-  feedWatchdog();
-  logDebug("Watchdog initialized");
-
   if (esp_now_init() != ESP_OK) {
     logDebug("ESP-NOW init failed");
     while (true) {
-      feedWatchdog();
-      delay(1000);
+          delay(1000);
     }
   }
   esp_now_register_recv_cb(onDataRecv);
@@ -236,11 +202,9 @@ void setup() {
 #endif
 
   logDebug("DoorSLAVE_SAFETY ready");
-  feedWatchdog();
 }
 
 void loop() {
-  feedWatchdog();
 
   uint32_t now = millis();
 
@@ -276,6 +240,5 @@ void loop() {
       break;
   }
 
-  feedWatchdog();
   delay(10);
 }

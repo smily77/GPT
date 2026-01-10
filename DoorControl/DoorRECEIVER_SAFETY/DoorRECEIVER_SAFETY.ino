@@ -6,7 +6,6 @@
 #include <WiFi.h>
 #include <esp_wifi.h>
 #include <esp_now.h>
-#include <esp_task_wdt.h>
 #include <mbedtls/md.h>
 #include <Adafruit_NeoPixel.h>
 #include <doorLockData.h>
@@ -18,7 +17,6 @@
 #define IN_RANGE_TIMEOUT_MS 3000
 #define RELAY_PULSE_MS 350
 #define DEBUG 1
-#define WATCHDOG_TIMEOUT_S 10
 // ================================
 
 #define PROTOCOL_VERSION 1
@@ -67,10 +65,6 @@ uint32_t lastContactMs[8] = {0};
 // Safety permit state
 bool safetySlaveConfigured = false;
 uint16_t currentPermitNonce = 0;
-
-void feedWatchdog() {
-  esp_task_wdt_reset();
-}
 
 void setStatusColor(uint32_t color) {
   statusPixel.setPixelColor(0, color);
@@ -196,16 +190,13 @@ void fillRandom(uint8_t *buf, size_t len) {
 }
 
 void sendMessage(const uint8_t *mac, const Message &msg) {
-  feedWatchdog();
   esp_now_send(mac, (const uint8_t *)&msg, sizeof(Message));
-  feedWatchdog();
 }
 
 void sendPermit(uint8_t permitType, uint16_t nonce) {
 #ifdef DOORSAFETY_SLAVE_MAC
   if (!safetySlaveConfigured) return;
 
-  feedWatchdog();
   PermitMessage pm = {};
   pm.type = permitType;
   pm.magic = PERMIT_MAGIC;
@@ -216,14 +207,12 @@ void sendPermit(uint8_t permitType, uint16_t nonce) {
     esp_now_send(DOORSAFETY_SLAVE_MAC, (const uint8_t *)&pm, sizeof(PermitMessage));
     delayMicroseconds(500);
   }
-  feedWatchdog();
 
   logDebug("Sent PERMIT%d nonce=%u", permitType, nonce);
 #endif
 }
 
 void sendChallenge(const SenderSecret &sc, const uint8_t *mac) {
-  feedWatchdog();
   SessionState &ss = sessions[sc.sender_id % 8];
   ss.session_id = rand32();
   fillRandom(ss.nonce, 16);
@@ -241,11 +230,9 @@ void sendChallenge(const SenderSecret &sc, const uint8_t *mac) {
   sendMessage(mac, msg);
   logDebug("Challenge to sender %d", sc.sender_id);
   setStatusColor(colorGreen());
-  feedWatchdog();
 }
 
 void sendAck(const SenderSecret &sc, uint32_t session_id, const uint8_t *mac, uint8_t code) {
-  feedWatchdog();
   Message msg = {};
   msg.version = PROTOCOL_VERSION;
   msg.type = MSG_OPEN_ACK;
@@ -254,11 +241,9 @@ void sendAck(const SenderSecret &sc, uint32_t session_id, const uint8_t *mac, ui
   msg.reserved = code;
   computeAckTag(msg.tag, sc, session_id, code);
   sendMessage(mac, msg);
-  feedWatchdog();
 }
 
 void sendDeny(const SenderSecret &sc, uint32_t session_id, const uint8_t *mac, uint8_t code) {
-  feedWatchdog();
   Message msg = {};
   msg.version = PROTOCOL_VERSION;
   msg.type = MSG_DENY;
@@ -267,31 +252,25 @@ void sendDeny(const SenderSecret &sc, uint32_t session_id, const uint8_t *mac, u
   msg.reserved = code;
   computeDenyTag(msg.tag, sc, session_id, code);
   sendMessage(mac, msg);
-  feedWatchdog();
 }
 
 void handleHello(const SenderSecret &sc, const uint8_t *mac) {
-  feedWatchdog();
   lastContactMs[sc.sender_id % 8] = millis();
   sendChallenge(sc, mac);
-  feedWatchdog();
 }
 
 void handleOpen(const SenderSecret &sc, const uint8_t *mac, const Message &msg) {
-  feedWatchdog();
   lastContactMs[sc.sender_id % 8] = millis();
   SessionState &ss = sessions[sc.sender_id % 8];
   if (msg.session_id != ss.session_id || ss.used || millis() > ss.expires_at) {
     sendDeny(sc, msg.session_id, mac, 1);
-    feedWatchdog();
-    return;
+      return;
   }
   uint8_t expected[16];
   computeOpenTag(expected, sc, msg.session_id, ss.nonce);
   if (!constantTimeEqual(expected, msg.tag, 16)) {
     sendDeny(sc, msg.session_id, mac, 2);
-    feedWatchdog();
-    return;
+      return;
   }
   ss.used = true;
 
@@ -302,19 +281,16 @@ void handleOpen(const SenderSecret &sc, const uint8_t *mac, const Message &msg) 
   // 1) Send PERMIT1 to slave (if configured)
   sendPermit(PERMIT_MSG_PERMIT1, currentPermitNonce);
 
-  feedWatchdog();
 
   // 2) Pulse local relay
   relayPulse = true;
   relayUntil = millis() + RELAY_PULSE_MS;
   setStatusColor(colorBlue());
 
-  feedWatchdog();
 
   // 3) Send PERMIT2 to slave (if configured)
   sendPermit(PERMIT_MSG_PERMIT2, currentPermitNonce);
 
-  feedWatchdog();
 
   // 4) Optional late backup sends
   delay(10);
@@ -323,7 +299,6 @@ void handleOpen(const SenderSecret &sc, const uint8_t *mac, const Message &msg) 
 
   sendAck(sc, msg.session_id, mac, 0);
   logDebug("Open accepted sender=%d", sc.sender_id);
-  feedWatchdog();
 }
 
 void ensurePeer(const uint8_t *mac) {
@@ -337,7 +312,6 @@ void ensurePeer(const uint8_t *mac) {
 }
 
 void onDataRecv(const esp_now_recv_info *info, const uint8_t *incomingData, int len) {
-  feedWatchdog();
   if (!info) return;
   const uint8_t *mac = info->src_addr;
   logPeer("RX from ", mac);
@@ -347,12 +321,10 @@ void onDataRecv(const esp_now_recv_info *info, const uint8_t *incomingData, int 
   const SenderSecret *sc = findSender(msg.sender_id, mac);
   if (!sc) {
     logDebug("Unknown sender or MAC mismatch");
-    feedWatchdog();
-    return;
+      return;
   }
   if (msg.version != PROTOCOL_VERSION) {
-    feedWatchdog();
-    return;
+      return;
   }
   ensurePeer(mac);
   switch (msg.type) {
@@ -365,11 +337,9 @@ void onDataRecv(const esp_now_recv_info *info, const uint8_t *incomingData, int 
     default:
       break;
   }
-  feedWatchdog();
 }
 
 void onDataSent(const uint8_t *, esp_now_send_status_t status) {
-  feedWatchdog();
   logDebug("Send status=%d", status);
 }
 
@@ -391,22 +361,10 @@ void setup() {
   esp_wifi_get_mac(WIFI_IF_STA, selfMac);
   logPeer("Receiver MAC ", selfMac);
 
-  // Initialize watchdog (LIVENESS safeguard)
-  esp_task_wdt_config_t wdt_config = {
-    .timeout_ms = WATCHDOG_TIMEOUT_S * 1000,
-    .idle_core_mask = 0,
-    .trigger_panic = true
-  };
-  esp_task_wdt_init(&wdt_config);
-  esp_task_wdt_add(NULL);  // Add current task
-  feedWatchdog();
-  logDebug("Watchdog initialized");
-
   if (esp_now_init() != ESP_OK) {
     logDebug("ESP-NOW init failed");
     while (true) {
-      feedWatchdog();
-      delay(1000);
+          delay(1000);
     }
   }
   esp_now_register_recv_cb(onDataRecv);
@@ -426,11 +384,9 @@ void setup() {
   logDebug("Safety slave NOT configured - operating standalone");
 #endif
 
-  feedWatchdog();
 }
 
 void loop() {
-  feedWatchdog();
 
   uint32_t now = millis();
   if (relayPulse && now > relayUntil) {
@@ -438,8 +394,7 @@ void loop() {
     relayPulse = false;
   }
   if (relayPulse) {
-    feedWatchdog();
-    digitalWrite(RELAY_PIN, HIGH);
+      digitalWrite(RELAY_PIN, HIGH);
     setStatusColor(colorBlue());
   } else {
     digitalWrite(RELAY_PIN, LOW);
@@ -457,6 +412,5 @@ void loop() {
     setStatusColor(hasActiveSession(now) ? colorGreen() : colorOff());
   }
 
-  feedWatchdog();
   delay(10);
 }
