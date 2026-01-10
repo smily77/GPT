@@ -221,6 +221,7 @@ void sendPermit(uint8_t type, uint16_t nonce) {
   msg.magic = PERMIT_MAGIC;
   msg.nonce = nonce;
   esp_now_send(SAFETY_SLAVE_MAC, (const uint8_t *)&msg, sizeof(msg));
+  logDebug("Permit TX type=%u nonce=%u", type, nonce);
 #else
   (void)type;
   (void)nonce;
@@ -422,21 +423,13 @@ void processSafetyPermit() {
 
   if (safetyState.step == 1) {
     startRelayPulse();
-    safetyState.step = 2;
-    return;
-  }
-
-  if (safetyState.step == 2) {
-    if (relayPulse) {
-      return;
-    }
     sendPermitBurst(PERMIT_TYPE_2, safetyState.nonce);
-    safetyState.step = 3;
+    safetyState.step = 2;
     safetyState.next_action_ms = millis() + PERMIT_LATE_BACKUP_DELAY_MS;
     return;
   }
 
-  if (safetyState.step == 3) {
+  if (safetyState.step == 2) {
 #if PERMIT_LATE_BACKUP_ENABLED
     if (!safetyState.late_backup_sent && millis() >= safetyState.next_action_ms) {
       sendPermitBurst(PERMIT_TYPE_1, safetyState.nonce);

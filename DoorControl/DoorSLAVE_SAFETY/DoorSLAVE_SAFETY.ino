@@ -101,6 +101,7 @@ void onDataRecv(const esp_now_recv_info *info, const uint8_t *incomingData, int 
   if (len != (int)sizeof(PermitMessage)) return;
   PermitMessage msg = {};
   memcpy(&msg, incomingData, sizeof(msg));
+  logDebug("Permit RX type=%u nonce=%u magic=0x%08lX", msg.type, msg.nonce, (unsigned long)msg.magic);
   if (msg.magic != PERMIT_MAGIC) return;
 
   uint32_t now = millis();
