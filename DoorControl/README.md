@@ -184,6 +184,52 @@ This component is mandatory for all secure door installations.
 
 
 
+\### 4.1.1 Door Receiver with Optional SafetyBox
+
+
+
+\*\*`DoorRECEIVER_SAFETY/`\*\*
+
+
+
+\* Secure receiver compatible with the existing door protocol (README §3.1)
+
+\* Adds an \*\*optional\*\* SafetyBox relay gate (`DoorSLAVE_SAFETY`) in series
+
+\* Sends non-cryptographic permit messages to the SafetyBox after successful authentication
+
+\* SafetyBox is a \*\*safety\*\* layer only, not a security layer
+
+\* If no SafetyBox is configured or present, door operation remains identical to `DoorRECEIVER`
+
+
+
+---
+
+
+
+\### 4.1.2 SafetyBox Relay Gate
+
+
+
+\*\*`DoorSLAVE_SAFETY/`\*\*
+
+
+
+\* Secondary relay box wired in series with the primary door relay
+
+\* Accepts only short permit sequences from `DoorRECEIVER_SAFETY`
+
+\* Minimal state machine; no cryptography and no persistent state
+
+\* Intended purely as a liveness/safety barrier, not a security feature
+
+
+
+---
+
+
+
 \### 4.2 Controllers
 
 
@@ -408,15 +454,17 @@ The following matrix defines which components are expected to interoperate direc
 
 
 
-| Component               | DoorRECEIVER       | ActorOTA\_DC     | ActorOTA\_DC\_LIGHT |
+| Component               | DoorRECEIVER       | DoorRECEIVER\_SAFETY | DoorSLAVE\_SAFETY | ActorOTA\_DC     | ActorOTA\_DC\_LIGHT |
 
-| ----------------------- | ------------------ | --------------- | ----------------- |
+| ----------------------- | ------------------ | ------------------ | ---------------- | --------------- | ----------------- |
 
-| DoorSENDER              | ✅ Secure door only | ❌               | ❌                 |
+| DoorSENDER              | ✅ Secure door only | ✅ Secure door only | ❌               | ❌               | ❌                 |
 
-| ControllerOTA\_DC\_GEN\_II | ✅ Secure door      | ✅ Actor control | ✅ Actor control   |
+| ControllerOTA\_DC\_GEN\_II | ✅ Secure door      | ✅ Secure door      | ❌               | ✅ Actor control | ✅ Actor control   |
 
-| ControllerOTA           | ❌                  | ✅               | ❌                 |
+| ControllerOTA           | ❌                  | ❌                  | ❌               | ✅               | ❌                 |
+
+| DoorRECEIVER\_SAFETY     | ❌                  | ❌                  | ✅ Permit link   | ❌               | ❌                 |
 
 
 
@@ -587,6 +635,4 @@ When extending or modifying this system:
 
 
 AI agents should treat these constraints as \*\*hard requirements\*\*, not suggestions.
-
-
 

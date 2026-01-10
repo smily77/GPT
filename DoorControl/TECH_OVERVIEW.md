@@ -17,6 +17,16 @@ Dieses Dokument beschreibt die Funktionsweise der DoorSENDER- und DoorRECEIVER-S
 - `uint8_t nonce[16]` (für CHALLENGE; bei anderen Messages leer oder mit receiver_nonce beim OPEN)
 - `uint8_t tag[16]` (Trunc128 von HMAC-SHA256)
 
+### Safety-Permit-Format (optional)
+Die Safety-Permit-Schicht ist **getrennt** vom Door-Sicherheitsprotokoll und dient nur als Liveness-/Sicherheitsbarriere.
+
+`PermitMessage` ist gepackt und 7 Bytes lang:
+- `uint8_t type` (PERMIT1=1, PERMIT2=2)
+- `uint32_t magic` (fester 32-bit Magic-Wert zur Erkennung)
+- `uint16_t nonce` (kleiner Nonce, frisch pro Öffnung)
+
+Permits werden ohne Kryptografie übertragen und verwenden keine persistenten Zähler oder NVS.
+
 ## Kryptografie
 - HMAC-SHA256 über mbedTLS, Ergebnis auf 16 Bytes gekürzt.
 - Konstante Zeitvergleichsfunktion für Tags.
@@ -27,6 +37,14 @@ Dieses Dokument beschreibt die Funktionsweise der DoorSENDER- und DoorRECEIVER-S
 2. **CHALLENGE** (Receiver → Sender): enthält `session_id`, `receiver_nonce`, Tag = HMAC("CHAL" || sender_id || session_id || receiver_nonce || receiver_mac).
 3. **OPEN** (Sender → Receiver): nur bei gültiger Session; enthält `session_id`, `receiver_nonce`, Tag = HMAC("OPEN" || sender_id || session_id || receiver_nonce || receiver_mac).
 4. **OPEN_ACK** oder **DENY** (Receiver → Sender): Tag = HMAC("ACK"/"DENY" || sender_id || session_id || code).
+
+## Safety-Permit-Ablauf (optional, DoorRECEIVER_SAFETY ↔ DoorSLAVE_SAFETY)
+1. **PERMIT1** (Receiver → SafetyBox): nach erfolgreicher Authentifizierung gesendet, enthält `magic` + `nonce`.
+2. **Relais-Puls**: der primäre Receiver pulst sein Relais lokal.
+3. **PERMIT2** (Receiver → SafetyBox): erneut `magic` + `nonce`, gleiche Nonce wie PERMIT1.
+4. Optional kann PERMIT1/PERMIT2 einmal verzögert erneut gesendet werden.
+
+Diese Schicht ist **keine** Sicherheitsverbesserung des Door-Protokolls (README §3.1), sondern nur eine optionale Safety-Barriere.
 
 ## Anti-Replay
 - `session_id` und `receiver_nonce` werden per `esp_random()` neu generiert je HELLO/CHALLENGE.
@@ -45,6 +63,12 @@ Dieses Dokument beschreibt die Funktionsweise der DoorSENDER- und DoorRECEIVER-S
 - Führt `last_contact_ms` pro Sender, aktualisiert bei CHALLENGE/OPEN.
 - Statuspixel: Aus, wenn seit `IN_RANGE_TIMEOUT_MS` kein Kontakt; Grün bei Kontakt; Blau während Relais-Puls.
 - Relais: 350 ms HIGH-Puls auf `RELAY_PIN` bei gültigem OPEN.
+
+### SafetyBox (DoorSLAVE_SAFETY)
+- Zustände: `IDLE` → `GOT_PERMIT1` → `DONE`.
+- `IDLE` → `GOT_PERMIT1`: bei gültigem PERMIT1, speichert Nonce + Zeitstempel.
+- `GOT_PERMIT1` → `DONE`: bei PERMIT2 mit gleicher Nonce innerhalb eines kurzen Fensters (≤200 ms); pulst Relais ~400–600 ms.
+- `DONE`: ignoriert weitere Permits für ~1 s, danach zurück zu `IDLE`.
 
 ## Erweiterungspunkte
 - **Weitere Sender**: `SENDER_SECRETS[]` in `doorLockData.h` erweitern (MAC, sender_id, key); Sender erhält passenden Key/MAC und setzt `SENDER_ID` entsprechend.

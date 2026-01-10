@@ -58,6 +58,8 @@ Door security must remain stateless across power cycles
 
 Door and Actor logic must remain separated in code paths
 
+The SafetyBox (DoorSLAVE_SAFETY) is optional; DoorRECEIVER_SAFETY must operate fully without it.
+
 Violating any of these rules is considered an incorrect solution.
 
 3. Allowed Base Implementations
@@ -100,6 +102,11 @@ All changes to protocols MUST be reflected consistently in:
 code
 
 TECH_OVERVIEW.md
+
+Future door receiver variants must preserve:
+
+- Full compatibility with the existing door security protocol (README §3.1)
+- Optional safety permit behavior (SafetyBox may be present or absent)
 
 6. Code Generation Rules
 

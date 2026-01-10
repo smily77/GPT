@@ -26,6 +26,12 @@ static const uint8_t RECEIVER_MAC[6] = {0x50, 0x78, 0x7D, 0x52, 0xD8, 0xA8};
 // Dedicated MAC for the RemoteSwitch actor (ESP32-C3 relay target)
 static const uint8_t ACTOR_MAC[6] = {0x24, 0x6F, 0x28, 0xAA, 0xAA, 0x02};
 
+// Optional SafetyBox MACs (uncomment to enable SafetyBox relay in series)
+// DoorRECEIVER_SAFETY sends permits to DOORSAFETY_SLAVE_MAC.
+// DoorSLAVE_SAFETY accepts permits from DOORSAFETY_MASTER_MAC.
+// #define DOORSAFETY_SLAVE_MAC {0x24, 0x6F, 0x28, 0xAA, 0xBB, 0x03}
+// #define DOORSAFETY_MASTER_MAC {0x50, 0x78, 0x7D, 0x52, 0xD8, 0xA8}
+
 // Allowed senders (example entries)
 static const SenderSecret SENDER_SECRETS[] = {
   {

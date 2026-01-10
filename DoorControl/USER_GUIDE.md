@@ -12,7 +12,10 @@ Dieses Projekt besteht aus einem ESP-NOW-Sender (DoorSENDER) mit OLED und Taster
 1. **WLAN-Kanal**: Setze `WIFI_CHANNEL` in `doorLockData.h` und nutze denselben Wert für Sender und Empfänger.
 2. **MACs/Schlüssel eintragen**: Fülle `RECEIVER_MAC` und alle Einträge in `SENDER_SECRETS[]` in `doorLockData.h` (MAC + 32-Byte-Key pro Sender).
 3. **Sender-ID**: Weise jedem Sender eine eindeutige `sender_id` (0–255) zu und setze `SENDER_ID` nur im DoorSENDER-Sketch auf den passenden Eintrag.
-4. **Pins prüfen**:
+4. **Optionale SafetyBox**: Wenn eine SafetyBox eingesetzt wird, definiere in `doorLockData.h`:
+   - `DOORSAFETY_SLAVE_MAC` für `DoorRECEIVER_SAFETY`
+   - `DOORSAFETY_MASTER_MAC` für `DoorSLAVE_SAFETY`
+5. **Pins prüfen**:
    - Sender: Button an GPIO7 (INPUT_PULLUP, aktiv low), SDA=GPIO8, SCL=GPIO9, optional LED an GPIO6 (wird aktuell low gesetzt).
    - Receiver: Relais an `RELAY_PIN`, WS2812-Pixel an GPIO8.
 
@@ -26,6 +29,11 @@ Dieses Projekt besteht aus einem ESP-NOW-Sender (DoorSENDER) mit OLED und Taster
 - **OLED-Anzeige (Sender)**: zeigt „-“, „Link“ oder „Denay“.
 - **Button**: Bei „Link“ wird ein OPEN gesendet; sonst zeigt der Sender „-“.
 - **Status-Pixel (Receiver)**: Aus = kein Kontakt, Grün = gültiger Kontakt in letzter Zeit, Blau = Relais aktiv.
+
+## SafetyBox (optional)
+- **Installation/Wiring**: Die SafetyBox wird als **zweites Relais in Serie** mit dem bestehenden Türrelais geschaltet.
+- **Programmierung**: Flashe `DoorRECEIVER_SAFETY` auf den primären Empfänger und `DoorSLAVE_SAFETY` auf die SafetyBox.
+- **Fehlender Slave**: Wenn keine SafetyBox konfiguriert oder erreichbar ist, öffnet die Tür wie bei `DoorRECEIVER` normal weiter.
 
 ## Fehlersuche
 - Prüfe, dass die MAC-Adressen exakt mit der Allowlist übereinstimmen und der Kanal korrekt ist.
