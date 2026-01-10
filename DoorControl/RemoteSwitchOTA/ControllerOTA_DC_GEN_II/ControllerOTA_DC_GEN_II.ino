@@ -847,7 +847,7 @@ void sendOtaRequest() {
 void setup() {
 #if PLATFORM_REMOTE
   pinMode(PIN_POWER_HOLD, OUTPUT);
-  digitalWrite(PIN_POWER_HOLD, HIGH); // ensure power hold asserted first
+  digitalWrite(PIN_POWER_HOLD, LOW); // Start with power hold LOW (MH-CD42 off)
 #endif
 #if defined(Atom3)
   auto cfg = M5.config();
@@ -1073,7 +1073,15 @@ void handleRemoteFlow(unsigned long now, bool doorLink) {
   }
 
   if (remoteSleepScheduled && !openPending && !successLedOn && (!denyUntil || now > denyUntilMs)) {
+    // MH-CD42 power-off sequence via FET
+    digitalWrite(PIN_POWER_HOLD, HIGH);
+    delay(100);  // 100ms HIGH
     digitalWrite(PIN_POWER_HOLD, LOW);
+    delay(500);  // 500ms LOW
+    digitalWrite(PIN_POWER_HOLD, HIGH);
+    delay(100);  // 100ms HIGH
+    digitalWrite(PIN_POWER_HOLD, LOW);
+    // Now enter deep sleep
     esp_deep_sleep_start();
   }
 }
