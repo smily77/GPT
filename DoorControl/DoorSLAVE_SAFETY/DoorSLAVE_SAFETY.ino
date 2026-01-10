@@ -12,7 +12,7 @@
 #define RELAY_PULSE_MS 500
 #define PERMIT_WINDOW_MS 200
 #define DONE_HOLD_MS 1000
-#define WDT_TIMEOUT_SECONDS 5
+#define WDT_TIMEOUT_MS 5000
 #define DEBUG 1
 // ================================
 
@@ -146,7 +146,11 @@ void setup() {
   pinMode(RELAY_PIN, OUTPUT);
   digitalWrite(RELAY_PIN, LOW);
 
-  esp_task_wdt_init(WDT_TIMEOUT_SECONDS, true);
+  esp_task_wdt_config_t wdt_config = {};
+  wdt_config.timeout_ms = WDT_TIMEOUT_MS;
+  wdt_config.idle_core_mask = 1 << 0;
+  wdt_config.trigger_panic = true;
+  esp_task_wdt_init(&wdt_config);
   esp_task_wdt_add(NULL);
 
   WiFi.mode(WIFI_STA);
