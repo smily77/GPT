@@ -369,8 +369,18 @@ void setup() {
 #ifdef RECEIVER_SAFETY_MAC
   // CRITICAL: Set MAC address from configuration BEFORE WiFi.mode()
   // This allows hardware replacement without reflashing all devices
-  esp_wifi_set_mac(WIFI_IF_STA, RECEIVER_SAFETY_MAC);
-  logDebug("MAC set from doorLockData.h");
+
+  // Stop WiFi if it's running, to ensure MAC can be set
+  WiFi.mode(WIFI_MODE_NULL);
+  delay(100);
+
+  // Now set the MAC address
+  esp_err_t result = esp_wifi_set_mac(WIFI_IF_STA, RECEIVER_SAFETY_MAC);
+  if (result == ESP_OK) {
+    logDebug("MAC set from doorLockData.h");
+  } else {
+    logDebug("MAC set FAILED, error=%d", result);
+  }
 #else
 #error "RECEIVER_SAFETY_MAC must be defined in doorLockData.h for DoorRECEIVER_SAFETY"
 #endif
