@@ -1,4 +1,6 @@
-// DoorRECEIVER.ino - ESP32-C3 garage door receiver with relay
+// DoorRECEIVER_SAFETY.ino - ESP32-C3 garage door receiver with relay and OPTIONAL safety permit protocol
+// This version adds a safety permit mechanism for an optional secondary relay box (DoorSLAVE_SAFETY).
+// The safety extension is OPTIONAL and the system works correctly even if no slave is present.
 
 #include <Arduino.h>
 #include <WiFi.h>
@@ -13,7 +15,7 @@
 #define STATUS_PIXEL_PIN 8
 #define SESSION_TTL_MS 10000
 #define IN_RANGE_TIMEOUT_MS 3000
-#define RELAY_PULSE_MS 350
+#define RELAY_PULSE_MS 500
 #define DEBUG 1
 // ================================
 
@@ -24,6 +26,11 @@
 #define MSG_OPEN_ACK 4
 #define MSG_DENY 5
 
+// Safety permit message types (separate from secure door protocol)
+#define PERMIT_MSG_PERMIT1 0x01
+#define PERMIT_MSG_PERMIT2 0x02
+#define PERMIT_MAGIC 0x53414645UL  // "SAFE" in ASCII
+
 struct __attribute__((packed)) Message {
   uint8_t version;
   uint8_t type;
@@ -32,6 +39,13 @@ struct __attribute__((packed)) Message {
   uint32_t session_id;
   uint8_t nonce[16];
   uint8_t tag[16];
+};
+
+struct __attribute__((packed)) PermitMessage {
+  uint8_t type;           // PERMIT_MSG_PERMIT1 or PERMIT_MSG_PERMIT2
+  uint32_t magic;         // PERMIT_MAGIC
+  uint16_t nonce;         // Small nonce for matching PERMIT1 and PERMIT2
+  uint8_t reserved[3];    // Padding to 10 bytes
 };
 
 struct SessionState {
@@ -47,6 +61,10 @@ Adafruit_NeoPixel statusPixel(1, STATUS_PIXEL_PIN, NEO_GRB + NEO_KHZ800);
 bool relayPulse = false;
 uint32_t relayUntil = 0;
 uint32_t lastContactMs[8] = {0};
+
+// Safety permit state
+bool safetySlaveConfigured = false;
+uint16_t currentPermitNonce = 0;
 
 void setStatusColor(uint32_t color) {
   statusPixel.setPixelColor(0, color);
@@ -175,6 +193,26 @@ void sendMessage(const uint8_t *mac, const Message &msg) {
   esp_now_send(mac, (const uint8_t *)&msg, sizeof(Message));
 }
 
+void sendPermit(uint8_t permitType, uint16_t nonce) {
+#ifdef SLAVE_SAFETY_MAC
+  if (!safetySlaveConfigured) return;
+
+  PermitMessage pm = {};
+  pm.type = permitType;
+  pm.magic = PERMIT_MAGIC;
+  pm.nonce = nonce;
+
+  // Send multiple times for robustness
+  for (int i = 0; i < 3; i++) {
+    esp_err_t result = esp_now_send(SLAVE_SAFETY_MAC, (const uint8_t *)&pm, sizeof(PermitMessage));
+    logDebug("  Permit send attempt %d, result=%d, size=%d", i+1, result, sizeof(PermitMessage));
+    delayMicroseconds(500);
+  }
+
+  logDebug("Sent PERMIT%d nonce=%u", permitType, nonce);
+#endif
+}
+
 void sendChallenge(const SenderSecret &sc, const uint8_t *mac) {
   SessionState &ss = sessions[sc.sender_id % 8];
   ss.session_id = rand32();
@@ -227,30 +265,57 @@ void handleOpen(const SenderSecret &sc, const uint8_t *mac, const Message &msg) 
   SessionState &ss = sessions[sc.sender_id % 8];
   if (msg.session_id != ss.session_id || ss.used || millis() > ss.expires_at) {
     sendDeny(sc, msg.session_id, mac, 1);
-    return;
+      return;
   }
   uint8_t expected[16];
   computeOpenTag(expected, sc, msg.session_id, ss.nonce);
   if (!constantTimeEqual(expected, msg.tag, 16)) {
     sendDeny(sc, msg.session_id, mac, 2);
-    return;
+      return;
   }
   ss.used = true;
+
+  // Generate fresh permit nonce
+  currentPermitNonce = (uint16_t)(esp_random() & 0xFFFF);
+  logDebug("=== DOOR OPEN - Starting permit sequence ===");
+
+  // SAFETY PERMIT PROTOCOL:
+  // 1) Send PERMIT1 to slave (if configured)
+  sendPermit(PERMIT_MSG_PERMIT1, currentPermitNonce);
+
+  // 2) Pulse local relay
   relayPulse = true;
   relayUntil = millis() + RELAY_PULSE_MS;
   setStatusColor(colorBlue());
+  logDebug("Local relay activated");
+
+  // 3) Send PERMIT2 to slave (if configured)
+  sendPermit(PERMIT_MSG_PERMIT2, currentPermitNonce);
+
+  // 4) Optional late backup sends
+  delay(10);
+  sendPermit(PERMIT_MSG_PERMIT1, currentPermitNonce);
+  sendPermit(PERMIT_MSG_PERMIT2, currentPermitNonce);
+
   sendAck(sc, msg.session_id, mac, 0);
   logDebug("Open accepted sender=%d", sc.sender_id);
 }
 
 void ensurePeer(const uint8_t *mac) {
   esp_now_peer_info_t peer = {};
-  if (esp_now_is_peer_exist(mac)) return;
+  if (esp_now_is_peer_exist(mac)) {
+    logDebug("Peer already exists");
+    return;
+  }
   memcpy(peer.peer_addr, mac, 6);
   peer.channel = WIFI_CHANNEL;
   peer.encrypt = false;
   esp_err_t res = esp_now_add_peer(&peer);
-  logDebug("Add peer res=%d", res);
+  if (res == ESP_OK) {
+    logDebug("Peer added successfully");
+  } else {
+    logDebug("Add peer FAILED, error=%d", res);
+  }
 }
 
 void onDataRecv(const esp_now_recv_info *info, const uint8_t *incomingData, int len) {
@@ -263,9 +328,11 @@ void onDataRecv(const esp_now_recv_info *info, const uint8_t *incomingData, int 
   const SenderSecret *sc = findSender(msg.sender_id, mac);
   if (!sc) {
     logDebug("Unknown sender or MAC mismatch");
-    return;
+      return;
   }
-  if (msg.version != PROTOCOL_VERSION) return;
+  if (msg.version != PROTOCOL_VERSION) {
+      return;
+  }
   ensurePeer(mac);
   switch (msg.type) {
     case MSG_HELLO:
@@ -279,16 +346,22 @@ void onDataRecv(const esp_now_recv_info *info, const uint8_t *incomingData, int 
   }
 }
 
-void onDataSent(const uint8_t *, esp_now_send_status_t status) {
-  logDebug("Send status=%d", status);
+void onDataSent(const uint8_t *mac, esp_now_send_status_t status) {
+  if (status != ESP_NOW_SEND_SUCCESS) {
+    logPeer("Send FAILED to ", mac);
+    logDebug("Send status=%d (0=success, 1=fail)", status);
+  }
 }
 
 void setup() {
 #if DEBUG
   Serial.begin(115200);
 #endif
+
+  // CRITICAL: Relay MUST default to OFF on boot (including watchdog reset)
   pinMode(RELAY_PIN, OUTPUT);
   digitalWrite(RELAY_PIN, LOW);
+
   statusPixel.begin();
   statusPixel.clear();
   statusPixel.show();
@@ -296,6 +369,7 @@ void setup() {
   // Initialize WiFi first (required for esp_wifi_set_mac)
   WiFi.mode(WIFI_STA);
 
+#ifdef RECEIVER_SAFETY_MAC
   // CRITICAL: Set MAC address from configuration
   // This allows hardware replacement without reflashing all devices
 
@@ -303,7 +377,7 @@ void setup() {
   esp_wifi_stop();
 
   // Now set the MAC address
-  esp_err_t result = esp_wifi_set_mac(WIFI_IF_STA, RECEIVER_MAC);
+  esp_err_t result = esp_wifi_set_mac(WIFI_IF_STA, RECEIVER_SAFETY_MAC);
   if (result == ESP_OK) {
     logDebug("MAC set from doorLockData.h");
   } else {
@@ -312,14 +386,20 @@ void setup() {
 
   // Start WiFi again
   esp_wifi_start();
+#else
+#error "RECEIVER_SAFETY_MAC must be defined in doorLockData.h for DoorRECEIVER_SAFETY"
+#endif
 
   esp_wifi_set_channel(WIFI_CHANNEL, WIFI_SECOND_CHAN_NONE);
   esp_wifi_get_mac(WIFI_IF_STA, selfMac);
   logPeer("Receiver MAC ", selfMac);
+  logDebug("WiFi Channel: %d", WIFI_CHANNEL);
 
   if (esp_now_init() != ESP_OK) {
     logDebug("ESP-NOW init failed");
-    while (true) delay(1000);
+    while (true) {
+          delay(1000);
+    }
   }
   esp_now_register_recv_cb(onDataRecv);
   esp_now_register_send_cb(onDataSent);
@@ -327,16 +407,32 @@ void setup() {
   for (size_t i = 0; i < SENDER_SECRETS_COUNT; i++) {
     ensurePeer(SENDER_SECRETS[i].sender_mac);
   }
+
+  // Check if safety slave is configured
+#ifdef SLAVE_SAFETY_MAC
+  safetySlaveConfigured = true;
+  logDebug("=== SAFETY SLAVE CONFIGURATION ===");
+  logPeer("Slave MAC: ", SLAVE_SAFETY_MAC);
+  logDebug("Slave channel: %d", WIFI_CHANNEL);
+  ensurePeer(SLAVE_SAFETY_MAC);
+  logDebug("Safety slave configured and peer added");
+#else
+  safetySlaveConfigured = false;
+  logDebug("Safety slave NOT configured - operating standalone");
+#endif
+
+  logDebug("=== DoorRECEIVER_SAFETY ready ===");
 }
 
 void loop() {
+
   uint32_t now = millis();
   if (relayPulse && now > relayUntil) {
     digitalWrite(RELAY_PIN, LOW);
     relayPulse = false;
   }
   if (relayPulse) {
-    digitalWrite(RELAY_PIN, HIGH);
+      digitalWrite(RELAY_PIN, HIGH);
     setStatusColor(colorBlue());
   } else {
     digitalWrite(RELAY_PIN, LOW);
@@ -353,4 +449,6 @@ void loop() {
   if (!relayPulse) {
     setStatusColor(hasActiveSession(now) ? colorGreen() : colorOff());
   }
+
+  delay(10);
 }

@@ -54,3 +54,14 @@ static const size_t SENDER_SECRETS_COUNT = sizeof(SENDER_SECRETS) / sizeof(SENDE
 
 // Controller/RemoteSwitch uses sender_id = 1
 static const uint8_t CONTROLLER_SENDER_ID = 1;
+
+// === OPTIONAL SAFETY EXTENSION ===
+// Uncomment and configure these MACs to enable the safety permit protocol
+// between DoorRECEIVER_SAFETY and DoorSLAVE_SAFETY.
+// If not defined, DoorRECEIVER_SAFETY operates exactly like DoorRECEIVER.
+
+// MAC that DoorRECEIVER_SAFETY will use (set with esp_wifi_set_mac)
+// #define RECEIVER_SAFETY_MAC ((const uint8_t[]){0x50, 0x78, 0x7D, 0x52, 0xD8, 0xA8})
+
+// MAC that DoorSLAVE_SAFETY will use (set with esp_wifi_set_mac)
+// #define SLAVE_SAFETY_MAC ((const uint8_t[]){0x24, 0x6F, 0x28, 0xBB, 0xCC, 0xDD})
