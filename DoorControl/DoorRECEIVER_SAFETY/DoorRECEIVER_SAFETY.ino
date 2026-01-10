@@ -72,6 +72,7 @@ bool relayPulse = false;
 uint32_t relayUntil = 0;
 uint32_t lastContactMs[8] = {0};
 SafetyPermitState safetyState;
+esp_task_wdt_user_handle_t wdtUser = nullptr;
 
 #ifdef DOORSAFETY_SLAVE_MAC
 static const uint8_t SAFETY_SLAVE_MAC[6] = DOORSAFETY_SLAVE_MAC;
@@ -81,7 +82,9 @@ static const bool SAFETY_SLAVE_ENABLED = false;
 #endif
 
 void feedWatchdog() {
-  esp_task_wdt_reset();
+  if (wdtUser) {
+    esp_task_wdt_reset_user(wdtUser);
+  }
 }
 
 void setStatusColor(uint32_t color) {
@@ -385,7 +388,7 @@ void setup() {
   wdt_config.idle_core_mask = 1 << 0;
   wdt_config.trigger_panic = true;
   esp_task_wdt_init(&wdt_config);
-  esp_task_wdt_add(NULL);
+  esp_task_wdt_add_user("DoorRECEIVER_SAFETY", &wdtUser);
 
   WiFi.mode(WIFI_STA);
   esp_wifi_set_channel(WIFI_CHANNEL, WIFI_SECOND_CHAN_NONE);

@@ -41,9 +41,12 @@ PermitState permitState = STATE_IDLE;
 uint16_t lastNonce = 0;
 uint32_t permit1At = 0;
 uint32_t doneUntil = 0;
+esp_task_wdt_user_handle_t wdtUser = nullptr;
 
 void feedWatchdog() {
-  esp_task_wdt_reset();
+  if (wdtUser) {
+    esp_task_wdt_reset_user(wdtUser);
+  }
 }
 
 void logPeer(const char *label, const uint8_t mac[6]) {
@@ -151,7 +154,7 @@ void setup() {
   wdt_config.idle_core_mask = 1 << 0;
   wdt_config.trigger_panic = true;
   esp_task_wdt_init(&wdt_config);
-  esp_task_wdt_add(NULL);
+  esp_task_wdt_add_user("DoorSLAVE_SAFETY", &wdtUser);
 
   WiFi.mode(WIFI_STA);
   esp_wifi_set_channel(WIFI_CHANNEL, WIFI_SECOND_CHAN_NONE);
