@@ -84,6 +84,7 @@ void ensurePeer(const uint8_t *mac) {
   if (esp_now_is_peer_exist(mac)) return;
   memcpy(peer.peer_addr, mac, 6);
   peer.channel = WIFI_CHANNEL;
+  peer.ifidx = WIFI_IF_STA;
   peer.encrypt = false;
   esp_err_t res = esp_now_add_peer(&peer);
   logDebug("Add peer res=%d", res);
@@ -163,6 +164,7 @@ void setup() {
   esp_task_wdt_add_user("DoorSLAVE_SAFETY", &wdtUser);
 
   WiFi.mode(WIFI_STA);
+  WiFi.setSleep(false);
   esp_wifi_set_channel(WIFI_CHANNEL, WIFI_SECOND_CHAN_NONE);
   logDebug("Safety slave boot, channel %u", WIFI_CHANNEL);
   logPeer("Safety master MAC ", SAFETY_MASTER_MAC);
