@@ -15,7 +15,7 @@
 #define STATUS_PIXEL_PIN 8
 #define SESSION_TTL_MS 10000
 #define IN_RANGE_TIMEOUT_MS 3000
-#define RELAY_PULSE_MS 350
+#define RELAY_PULSE_MS 500
 #define DEBUG 1
 // ================================
 
