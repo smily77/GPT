@@ -194,7 +194,7 @@ void sendMessage(const uint8_t *mac, const Message &msg) {
 }
 
 void sendPermit(uint8_t permitType, uint16_t nonce) {
-#ifdef DOORSAFETY_SLAVE_MAC
+#ifdef SLAVE_SAFETY_MAC
   if (!safetySlaveConfigured) return;
 
   PermitMessage pm = {};
@@ -204,7 +204,7 @@ void sendPermit(uint8_t permitType, uint16_t nonce) {
 
   // Send multiple times for robustness
   for (int i = 0; i < 3; i++) {
-    esp_err_t result = esp_now_send(DOORSAFETY_SLAVE_MAC, (const uint8_t *)&pm, sizeof(PermitMessage));
+    esp_err_t result = esp_now_send(SLAVE_SAFETY_MAC, (const uint8_t *)&pm, sizeof(PermitMessage));
     logDebug("  Permit send attempt %d, result=%d, size=%d", i+1, result, sizeof(PermitMessage));
     delayMicroseconds(500);
   }
@@ -366,6 +366,15 @@ void setup() {
   statusPixel.clear();
   statusPixel.show();
 
+#ifdef RECEIVER_SAFETY_MAC
+  // CRITICAL: Set MAC address from configuration BEFORE WiFi.mode()
+  // This allows hardware replacement without reflashing all devices
+  esp_wifi_set_mac(WIFI_IF_STA, RECEIVER_SAFETY_MAC);
+  logDebug("MAC set from doorLockData.h");
+#else
+#error "RECEIVER_SAFETY_MAC must be defined in doorLockData.h for DoorRECEIVER_SAFETY"
+#endif
+
   WiFi.mode(WIFI_STA);
   esp_wifi_set_channel(WIFI_CHANNEL, WIFI_SECOND_CHAN_NONE);
   esp_wifi_get_mac(WIFI_IF_STA, selfMac);
@@ -386,12 +395,12 @@ void setup() {
   }
 
   // Check if safety slave is configured
-#ifdef DOORSAFETY_SLAVE_MAC
+#ifdef SLAVE_SAFETY_MAC
   safetySlaveConfigured = true;
   logDebug("=== SAFETY SLAVE CONFIGURATION ===");
-  logPeer("Slave MAC: ", DOORSAFETY_SLAVE_MAC);
+  logPeer("Slave MAC: ", SLAVE_SAFETY_MAC);
   logDebug("Slave channel: %d", WIFI_CHANNEL);
-  ensurePeer(DOORSAFETY_SLAVE_MAC);
+  ensurePeer(SLAVE_SAFETY_MAC);
   logDebug("Safety slave configured and peer added");
 #else
   safetySlaveConfigured = false;

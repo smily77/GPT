@@ -128,15 +128,15 @@ void onDataRecv(const esp_now_recv_info *info, const uint8_t *incomingData, int 
   packetCount++;
   logDebug("Packet #%u received, len=%d", packetCount, len);
 
-#ifdef DOORSAFETY_MASTER_MAC
+#ifdef RECEIVER_SAFETY_MAC
   // Verify sender is the configured master
-  if (memcmp(info->src_addr, DOORSAFETY_MASTER_MAC, 6) != 0) {
+  if (memcmp(info->src_addr, RECEIVER_SAFETY_MAC, 6) != 0) {
     logPeer("Permit from unknown MAC: ", info->src_addr);
     logDebug("Expected master MAC differs, ignoring");
     return;
   }
 #else
-#error "DOORSAFETY_MASTER_MAC must be defined in doorLockData.h for DoorSLAVE_SAFETY"
+#error "RECEIVER_SAFETY_MAC must be defined in doorLockData.h for DoorSLAVE_SAFETY"
 #endif
 
   if (len != (int)sizeof(PermitMessage)) {
@@ -180,6 +180,15 @@ void setup() {
   pinMode(RELAY_PIN, OUTPUT);
   digitalWrite(RELAY_PIN, LOW);
 
+#ifdef SLAVE_SAFETY_MAC
+  // CRITICAL: Set MAC address from configuration BEFORE WiFi.mode()
+  // This allows hardware replacement without reflashing all devices
+  esp_wifi_set_mac(WIFI_IF_STA, SLAVE_SAFETY_MAC);
+  logDebug("MAC set from doorLockData.h");
+#else
+#error "SLAVE_SAFETY_MAC must be defined in doorLockData.h for DoorSLAVE_SAFETY"
+#endif
+
   WiFi.mode(WIFI_STA);
   esp_wifi_set_channel(WIFI_CHANNEL, WIFI_SECOND_CHAN_NONE);
 
@@ -197,21 +206,21 @@ void setup() {
   esp_now_register_recv_cb(onDataRecv);
   esp_now_register_send_cb(onDataSent);
 
-#ifdef DOORSAFETY_MASTER_MAC
+#ifdef RECEIVER_SAFETY_MAC
   // Add master as peer
   esp_now_peer_info_t peer = {};
-  memcpy(peer.peer_addr, DOORSAFETY_MASTER_MAC, 6);
+  memcpy(peer.peer_addr, RECEIVER_SAFETY_MAC, 6);
   peer.channel = WIFI_CHANNEL;
   peer.encrypt = false;
   esp_err_t res = esp_now_add_peer(&peer);
-  logPeer("Master MAC ", DOORSAFETY_MASTER_MAC);
+  logPeer("Master MAC ", RECEIVER_SAFETY_MAC);
   if (res == ESP_OK) {
     logDebug("Master peer added successfully");
   } else {
     logDebug("Master peer add FAILED, error=%d", res);
   }
 #else
-#error "DOORSAFETY_MASTER_MAC must be defined in doorLockData.h for DoorSLAVE_SAFETY"
+#error "RECEIVER_SAFETY_MAC must be defined in doorLockData.h for DoorSLAVE_SAFETY"
 #endif
 
   logDebug("DoorSLAVE_SAFETY ready");
