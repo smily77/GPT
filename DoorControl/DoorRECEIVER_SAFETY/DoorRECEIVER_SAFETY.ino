@@ -388,7 +388,12 @@ void setup() {
   wdt_config.timeout_ms = WDT_TIMEOUT_MS;
   wdt_config.idle_core_mask = 1 << 0;
   wdt_config.trigger_panic = true;
-  esp_task_wdt_init(&wdt_config);
+  esp_err_t wdt_res = esp_task_wdt_init(&wdt_config);
+  if (wdt_res == ESP_ERR_INVALID_STATE) {
+    logDebug("WDT already initialized");
+  } else if (wdt_res != ESP_OK) {
+    logDebug("WDT init failed err=%d", wdt_res);
+  }
   esp_task_wdt_add_user("DoorRECEIVER_SAFETY", &wdtUser);
 
   WiFi.mode(WIFI_STA);
