@@ -392,7 +392,12 @@ void setup() {
   logPeer("Receiver MAC ", selfMac);
 
   // Initialize watchdog (LIVENESS safeguard)
-  esp_task_wdt_init(WATCHDOG_TIMEOUT_S, true);
+  esp_task_wdt_config_t wdt_config = {
+    .timeout_ms = WATCHDOG_TIMEOUT_S * 1000,
+    .idle_core_mask = 0,
+    .trigger_panic = true
+  };
+  esp_task_wdt_init(&wdt_config);
   esp_task_wdt_add(NULL);  // Add current task
   feedWatchdog();
   logDebug("Watchdog initialized");
