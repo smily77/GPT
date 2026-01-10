@@ -296,7 +296,6 @@ void setup() {
   // Initialize WiFi first (required for esp_wifi_set_mac)
   WiFi.mode(WIFI_STA);
 
-#ifdef RECEIVER_MAC
   // CRITICAL: Set MAC address from configuration
   // This allows hardware replacement without reflashing all devices
 
@@ -313,9 +312,6 @@ void setup() {
 
   // Start WiFi again
   esp_wifi_start();
-#else
-#error "RECEIVER_MAC must be defined in doorLockData.h for DoorRECEIVER"
-#endif
 
   esp_wifi_set_channel(WIFI_CHANNEL, WIFI_SECOND_CHAN_NONE);
   esp_wifi_get_mac(WIFI_IF_STA, selfMac);
