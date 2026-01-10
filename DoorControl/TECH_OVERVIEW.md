@@ -57,3 +57,66 @@ Dieses Dokument beschreibt die Funktionsweise der DoorSENDER- und DoorRECEIVER-S
 - Arduino-ESP32 Core (aktuelle ESP-NOW-API mit `esp_now_recv_info`).
 - Bibliotheken: Adafruit_SSD1306, Adafruit_GFX, FreeSansBold12pt7b (Sender), mbedTLS (HMAC), Adafruit_NeoPixel (Receiver).
 - Beide Sketche setzen `WiFi.mode(WIFI_STA)`; definierte MACs werden vor ESP-NOW-Init gesetzt.
+
+---
+
+## Safety Extension (DoorRECEIVER_SAFETY / DoorSLAVE_SAFETY)
+
+Die Safety Extension ist eine **OPTIONALE** Hardware-Sicherheitsschicht, die das Risiko unbeabsichtigter Türöffnungen durch MCU-Abstürze, undefinierte GPIO-Zustände oder Software-Hänger reduziert. Diese Erweiterung **schwächt die Sicherheit des Hauptsystems NICHT** – die Challenge-Response-Authentifizierung bleibt vollständig intakt.
+
+### Architektur
+- **DoorRECEIVER_SAFETY**: Erweiterte Version des Receivers mit Safety-Permit-Protokoll
+- **DoorSLAVE_SAFETY**: Minimales Safety-Gate mit zweitem Relais (in Serie geschaltet)
+- Beide Geräte nutzen denselben `WIFI_CHANNEL`
+- Permit-Nachrichten sind **unverschlüsselt** und **nicht authentifiziert** (keine Kryptografie)
+- Keine NVS-Nutzung, keine persistenten Counter
+
+### Safety Permit Nachrichtenformat
+`PermitMessage` ist gepackt und 10 Bytes lang:
+- `uint8_t type` (PERMIT1=0x01, PERMIT2=0x02)
+- `uint32_t magic` (0x53414645 = "SAFE" in ASCII)
+- `uint16_t nonce` (kleine Nonce zum Abgleich von PERMIT1 und PERMIT2)
+- `uint8_t reserved[3]` (Padding)
+
+### Permit-Protokoll-Ablauf
+1. **Normale Authentifizierung**: Sender → Receiver (Challenge-Response wie bisher)
+2. **PERMIT1**: Nach erfolgreicher Authentifizierung generiert DoorRECEIVER_SAFETY eine frische 16-Bit-Nonce und sendet PERMIT1(nonce) an DoorSLAVE_SAFETY (3× zur Robustheit)
+3. **Relais-Puls (Master)**: DoorRECEIVER_SAFETY aktiviert sein lokales Relais (~350 ms)
+4. **PERMIT2**: DoorRECEIVER_SAFETY sendet PERMIT2(nonce) an DoorSLAVE_SAFETY (3×)
+5. **Optional**: Backup-Sendungen von PERMIT1 und PERMIT2 nach kurzer Verzögerung
+
+### DoorSLAVE_SAFETY State Machine
+**Zustände:**
+- `IDLE`: Wartet auf PERMIT1
+- `GOT_PERMIT1`: PERMIT1 empfangen, wartet auf PERMIT2
+- `DONE`: Relais wurde aktiviert, Cooldown-Phase
+
+**Übergänge:**
+- `IDLE → GOT_PERMIT1`: Beim Empfang von PERMIT1 mit gültiger Magic; Nonce und Timestamp werden gespeichert
+- `GOT_PERMIT1 → DONE`: Beim Empfang von PERMIT2 mit **übereinstimmender Nonce** und **innerhalb des Zeitfensters** (≤200 ms); Relais-Puls (~500 ms) wird ausgelöst
+- `DONE → IDLE`: Nach Cooldown-Periode (~1000 ms)
+- `GOT_PERMIT1 → IDLE`: Wenn PERMIT_WINDOW_MS überschritten oder Nonce-Mismatch
+
+**Validierung:**
+- PERMIT2-Nonce muss mit gespeicherter PERMIT1-Nonce übereinstimmen
+- Zeitdifferenz zwischen PERMIT1 und PERMIT2 muss ≤ PERMIT_WINDOW_MS sein (Standard: 200 ms)
+- Alle weiteren Permits werden während `DONE` ignoriert
+
+### Watchdog (Liveness-Schutz)
+Beide Programme (DoorRECEIVER_SAFETY und DoorSLAVE_SAFETY) implementieren den ESP32 Task Watchdog:
+- Timeout: 10 Sekunden
+- Watchdog wird gefüttert in: Hauptschleife, ESP-NOW RX/TX, vor/nach Relais-Puls
+- Bei Watchdog-Reset: Relais defaultet auf OFF, kein Permit-Versand während Boot
+- Watchdog ist ein **Liveness**-Mechanismus, **KEIN** Sicherheitsmechanismus
+
+### Optionalität (MANDATORY)
+- Wenn `DOORSAFETY_SLAVE_MAC` **nicht definiert** ist: DoorRECEIVER_SAFETY verhält sich exakt wie DoorRECEIVER
+- Wenn Slave-MAC konfiguriert ist, aber Slave fehlt: Türöffnung funktioniert trotzdem (nur Master-Relais)
+- Slave ist NIEMALS erforderlich für normale Türöffnung
+- Bestehende Projekte bleiben voll kompatibel
+
+### Sicherheitshinweise
+- **Safety ≠ Security**: Permit-Protokoll ist unverschlüsselt und bietet KEINEN Schutz gegen Angreifer
+- **Zweck**: Reduzierung von Hardwarefehlern (Crashes, GPIO-Glitches), NICHT Schutz gegen Replay oder Spoofing
+- **Hauptsicherheit**: Bleibt unverändert im Challenge-Response-Protokoll
+- **Relais in Serie**: Beide Relais müssen aktiv sein, damit die Tür öffnet

@@ -180,6 +180,74 @@ This component is mandatory for all secure door installations.
 
 
 
+\*\*`DoorRECEIVER\_SAFETY/`\*\*
+
+
+
+\* Enhanced version of DoorRECEIVER with optional safety permit protocol
+
+\* Adds support for a second relay box (DoorSLAVE\_SAFETY) wired in series
+
+\* Includes ESP32 task watchdog for liveness monitoring
+
+\* Fully backward compatible: works exactly like DoorRECEIVER when no slave is configured
+
+\* Safety permits are sent ONLY after successful challenge–response authentication
+
+
+
+\### 4.1a Safety Extension (Optional)
+
+
+
+\*\*`DoorSLAVE\_SAFETY/`\*\*
+
+
+
+\* Minimal safety gate for secondary relay box
+
+\* Wired in SERIES with the main door relay
+
+\* Requires sequential PERMIT1 and PERMIT2 messages with matching nonce
+
+\* Implements state machine with strict timing window (≤200 ms)
+
+\* Includes ESP32 task watchdog for liveness monitoring
+
+\* This is a \*\*SAFETY\*\* layer, NOT a security layer
+
+
+
+\*\*Purpose:\*\*
+
+
+
+The safety extension reduces risk of unintended door opening caused by:
+
+
+
+\* MCU crashes or watchdog resets
+
+\* Undefined GPIO states during boot
+
+\* Software hangs or race conditions
+
+
+
+\*\*Important:\*\*
+
+
+
+\* The safety extension does NOT strengthen the door security model
+
+\* Security is provided by the existing challenge–response protocol
+
+\* The safety layer only gates relay activation to reduce hardware failure risks
+
+\* DoorRECEIVER\_SAFETY operates normally even if the slave is absent or unresponsive
+
+
+
 ---
 
 
@@ -408,15 +476,19 @@ The following matrix defines which components are expected to interoperate direc
 
 
 
-| Component               | DoorRECEIVER       | ActorOTA\_DC     | ActorOTA\_DC\_LIGHT |
+| Component               | DoorRECEIVER       | DoorRECEIVER\_SAFETY | ActorOTA\_DC     | ActorOTA\_DC\_LIGHT | DoorSLAVE\_SAFETY |
 
-| ----------------------- | ------------------ | --------------- | ----------------- |
+| ----------------------- | ------------------ | ------------------ | --------------- | ----------------- | --------------- |
 
-| DoorSENDER              | ✅ Secure door only | ❌               | ❌                 |
+| DoorSENDER              | ✅ Secure door only | ✅ Secure door only | ❌               | ❌                 | ❌               |
 
-| ControllerOTA\_DC\_GEN\_II | ✅ Secure door      | ✅ Actor control | ✅ Actor control   |
+| ControllerOTA\_DC\_GEN\_II | ✅ Secure door      | ✅ Secure door      | ✅ Actor control | ✅ Actor control   | ❌               |
 
-| ControllerOTA           | ❌                  | ✅               | ❌                 |
+| ControllerOTA           | ❌                  | ❌                  | ✅               | ❌                 | ❌               |
+
+| DoorRECEIVER\_SAFETY     | —                  | —                  | —               | —                 | ✅ Safety permits |
+
+| DoorSLAVE\_SAFETY        | —                  | ✅ Safety permits   | —               | —                 | —               |
 
 
 
@@ -427,6 +499,20 @@ Legend:
 \* ✅ = intended and supported
 
 \* ❌ = not supported / not part of design
+
+\* — = not applicable
+
+
+
+\*\*Safety permit protocol:\*\*
+
+
+
+\* DoorRECEIVER\_SAFETY → DoorSLAVE\_SAFETY (optional, no crypto)
+
+\* Safety permits are sent ONLY after successful challenge–response authentication
+
+\* The safety protocol is separate from and does not weaken the door security protocol
 
 
 
@@ -583,6 +669,10 @@ When extending or modifying this system:
 \* Prefer extending `ControllerOTA\_DC\_GEN\_II` instead of creating new controllers
 
 \* Maintain strict compatibility with the door protocol defined in `TECH\_OVERVIEW.md`
+
+\* The safety extension (DoorRECEIVER\_SAFETY / DoorSLAVE\_SAFETY) is optional and must not be required for operation
+
+\* Future door receiver variants must preserve both main door security compatibility and optional safety permit behavior
 
 
 
